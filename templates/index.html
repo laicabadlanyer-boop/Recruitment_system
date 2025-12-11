@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J&T Express - Recruitment and Applicant Tracking System</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpeg') }}" type="image/jpeg">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo.jpeg') }}" type="image/jpeg">
+    <!-- Suppress Tailwind CDN warning -->
+    <script>
+        (function() {
+            if (typeof console !== 'undefined') {
+                const originalWarn = console.warn || function() {};
+                const originalError = console.error || function() {};
+                
+                console.warn = function(...args) {
+                    const message = args[0];
+                    if (typeof message === 'string' && (
+                        message.includes('cdn.tailwindcss.com') ||
+                        message.includes('should not be used in production') ||
+                        message.includes('Tailwind CSS')
+                    )) {
+                        return;
+                    }
+                    originalWarn.apply(console, args);
+                };
+                
+                console.error = function(...args) {
+                    const message = args[0];
+                    if (typeof message === 'string' && (
+                        message.includes('cdn.tailwindcss.com') ||
+                        message.includes('should not be used in production') ||
+                        message.includes('Tailwind CSS')
+                    )) {
+                        return;
+                    }
+                    originalError.apply(console, args);
+                };
+            }
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        body {
+            background: #0a0a0a;
+        }
+        
+        .gradient-border {
+            position: relative;
+        }
+        
+        .gradient-border::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #dc2626, transparent);
+        }
+        
+        .feature-card {
+            transition: all 0.3s ease;
+            border: 2px solid #2a2a2a;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-8px);
+            border-color: #dc2626;
+            box-shadow: 0 8px 30px rgba(220, 38, 38, 0.4);
+        }
+        
+        .feature-icon {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);
+        }
+        
+        .feature-card:hover .feature-icon {
+            box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5);
+            transform: scale(1.05);
+        }
+        
+        .btn-primary-custom {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 38, 38, 0.4);
+        }
+        
+        .btn-secondary-custom {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(74, 158, 255, 0.4);
+        }
+        
+        .nav-icon {
+            transition: all 0.3s ease;
+        }
+        
+        .nav-icon:hover {
+            transform: scale(1.1);
+            color: #dc2626;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-black border-b-2 border-red-600 shadow-lg shadow-red-600/30 sticky top-0 z-50">
+        <div class="container mx-auto px-4">
+            <div class="flex justify-between items-center py-5">
+                <!-- Logo -->
+                <a href="/" class="flex items-center space-x-3">
+                    <img src="{{ url_for('static', filename='images/logo.jpeg') }}" alt="WHITEHAT 88 Logo" class="w-12 h-12 rounded-full">
+                    <div>
+                        <span class="text-white-600 font-bold text-xl">J&T Express</span>
+                        <span class="block text-gray-400 text-xs -mt-1">Delivery Services</span>
+                    </div>
+                </a>
+
+                <!-- Desktop Menu -->
+                <div class="hidden lg:flex items-center space-x-8">
+                    <!-- Home Link -->
+                    <a href="{{ url_for('index') }}" class="flex items-center space-x-2 text-red-400 hover:text-red-300 transition-colors nav-icon">
+                        <i class="fas fa-home"></i>
+                        <span>Home</span>
+                    </a>
+                    
+                    <!-- Login with Icon -->
+                    <a href="{{ url_for('login') }}" class="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors nav-icon">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Login</span>
+                    </a>
+                    
+                    <!-- Register with Icon -->
+                    <a href="{{ url_for('register') }}" class="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-semibold transition-all nav-icon">
+                        <i class="fas fa-user-plus"></i>
+                        <span>Register</span>
+                    </a>
+
+                    <!-- About Us Link with 4 People Icon (Last in navigation) -->
+                    <a href="{{ url_for('about') }}" class="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors nav-icon">
+                        <i class="fas fa-users"></i>
+                        <span>About Us</span>
+                    </a>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <button id="mobile-menu-btn" class="lg:hidden bg-gray-800 p-2 rounded" aria-label="Toggle mobile menu" aria-controls="mobile-menu" aria-expanded="false">
+                    <i class="fas fa-bars text-white"></i>
+                </button>
+            </div>
+            
+            <!-- Mobile Menu -->
+            <div id="mobile-menu" class="lg:hidden hidden absolute top-full left-0 right-0 bg-gray-900 border-t border-gray-700 shadow-lg">
+                <div class="px-4 py-4 space-y-2">
+                    <a href="{{ url_for('index') }}" class="flex items-center space-x-2 text-red-400 hover:text-red-300 transition-colors py-2">
+                        <i class="fas fa-home"></i>
+                        <span>Home</span>
+                    </a>
+                    <a href="{{ url_for('login') }}" class="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors py-2">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Login</span>
+                    </a>
+                    <a href="{{ url_for('register') }}" class="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-all">
+                        <i class="fas fa-user-plus"></i>
+                        <span>Register</span>
+                    </a>
+                    <a href="{{ url_for('about') }}" class="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors py-2">
+                        <i class="fas fa-users"></i>
+                        <span>About Us</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="gradient-border pt-16 pb-24 bg-gray-900">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12">
+                <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-white">
+                    Recruitment and Applicant Tracking System
+                </h1>
+                <p class="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
+                    Streamline your recruitment process with J&T Express Delivery Services. Manage job postings, applications,
+                    interviews, and more all in one place.
+                </p>
+            </div>
+
+            <!-- Feature Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+                <!-- Feature 1: For Administrators -->
+                <div class="feature-card bg-gray-800 rounded-xl p-8 text-center">
+                    <div class="feature-icon w-16 h-16 bg-red-600 rounded-xl flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-users-cog text-yellow-400 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-4 text-white">For Administrators</h3>
+                    <p class="text-gray-300 leading-relaxed">
+                        Manage branches, post jobs, review applications, schedule interviews, and track the entire recruitment process.
+                    </p>
+                </div>
+
+                <!-- Feature 2: For Applicants -->
+                <div class="feature-card bg-gray-800 rounded-xl p-8 text-center">
+                    <div class="feature-icon w-16 h-16 bg-red-600 rounded-xl flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-user-tie text-blue-400 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-4 text-white">For Applicants</h3>
+                    <p class="text-gray-300 leading-relaxed">
+                        Browse available positions, submit applications, track your status, and receive notifications about your application.
+                    </p>
+                </div>
+
+                <!-- Feature 3: Email Notifications -->
+                <div class="feature-card bg-gray-800 rounded-xl p-8 text-center">
+                    <div class="feature-icon w-16 h-16 bg-red-600 rounded-xl flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-envelope text-green-400 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-4 text-white">Email Notifications</h3>
+                    <p class="text-gray-300 leading-relaxed">
+                        Automatic email notifications for application updates, interview scheduling, and important announcements.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Call to Action Section -->
+            <div class="text-center mt-24 pt-16 border-t border-gray-700">
+                <h2 class="text-3xl md:text-4xl font-bold mb-6 text-white">Ready to Get Started?</h2>
+                <p class="text-lg text-gray-300 max-w-2xl mx-auto mb-8 leading-relaxed">
+                    Join J&T Express Delivery Services today and take the next step in your career or find the perfect candidates for your team.
+                </p>
+                
+                <div class="flex flex-col sm:flex-row justify-center items-center gap-6">
+                    <a href="{{ url_for('register') }}" class="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all flex items-center">
+                        <i class="fas fa-user-plus mr-3"></i>
+                        Apply Now
+                    </a>
+                    <a href="{{ url_for('about') }}" class="border-2 border-red-600 hover:bg-red-600 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all flex items-center">
+                        <i class="fas fa-users mr-3"></i>
+                        Learn More About Us
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // Mobile menu toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const mobileMenu = document.getElementById('mobile-menu');
+            
+            if (mobileMenuBtn && mobileMenu) {
+                mobileMenuBtn.addEventListener('click', function() {
+                    const isHidden = mobileMenu.classList.contains('hidden');
+                    mobileMenu.classList.toggle('hidden');
+                    mobileMenuBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+                });
+            }
+
+            // Automatic year update for footer
+            const currentYearEl = document.getElementById('currentYear');
+            if (currentYearEl) {
+                const currentYear = new Date().getFullYear();
+                currentYearEl.textContent = currentYear;
+            }
+        });
+    </script>
+</body>
+</html>

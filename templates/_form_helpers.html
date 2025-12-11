@@ -1,0 +1,28 @@
+{# CSRF Token Helper #}
+{% macro csrf_token() %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+{% endmacro %}
+
+{# Form Field with Validation #}
+{% macro form_field(field_name, field_type='text', label='', placeholder='', required=false, validation='', value='', classes='') %}
+    <div class="form-group">
+        {% if label %}
+        <label for="{{ field_name }}" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">
+            {{ label }}{% if required %} *{% endif %}
+        </label>
+        {% endif %}
+        <input 
+            type="{{ field_type }}" 
+            name="{{ field_name }}" 
+            id="{{ field_name }}"
+            {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+            {% if required %}required{% endif %}
+            {% if validation %}data-validate="{{ validation }}" data-label="{{ label }}"{% endif %}
+            {% if value %}value="{{ value }}"{% endif %}
+            class="w-full form-input px-3 py-2 rounded-lg {{ classes }}"
+            autocomplete="{% if field_type == 'email' %}email{% elif field_type == 'password' %}current-password{% elif field_name == 'phone' %}tel{% else %}off{% endif %}"
+        >
+        <div class="field-error text-red-400 text-xs mt-1 hidden"></div>
+    </div>
+{% endmacro %}
+

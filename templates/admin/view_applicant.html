@@ -1,0 +1,128 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}View Applicant • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sidebar-item.active { border-color: #dc2626; background: rgba(220,38,38,.12); }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="card rounded-xl bg-gradient-to-r from-gray-900 via-gray-900 to-black p-3 sm:p-4 md:p-5">
+    <div class="flex items-start justify-between">
+        <div>
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2">Applicant Details</h1>
+            <p class="text-gray-400 text-xs sm:text-sm md:text-base">View detailed information about this applicant.</p>
+        </div>
+        <a href="{{ url_for('applicants') }}" class="px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium">
+            <i class="fas fa-arrow-left mr-2"></i>Back
+        </a>
+    </div>
+</header>
+
+{% if applicant %}
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4">
+    <h2 class="text-sm sm:text-base font-semibold mb-3">Personal Information</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Full Name</label>
+            <p class="text-white font-semibold">{{ applicant.full_name }}</p>
+        </div>
+        <div>
+            <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Email</label>
+            <p class="text-white">{{ applicant.email }}</p>
+        </div>
+        <div>
+            <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Phone Number</label>
+            <p class="text-white">{{ applicant.phone_number or 'N/A' }}</p>
+        </div>
+        <div>
+            <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Account Created</label>
+            <p class="text-white text-sm">{{ applicant.created_at|format_human_datetime if applicant.created_at else 'N/A' }}</p>
+        </div>
+        <div>
+            <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Last Login</label>
+            <p class="text-white text-sm">
+                {% if applicant.last_login %}
+                    {{ applicant.last_login|format_human_datetime }}
+                {% else %}
+                    Never
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</section>
+
+{# Old single-resume block removed; using grouped documents below #}
+
+{% if documents and (documents.resume|length + documents.letter|length + documents.license|length) > 0 %}
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4 mb-6">
+    <h2 class="text-sm sm:text-base font-semibold mb-4">Uploaded Documents ({{ documents.resume|length + documents.letter|length + documents.license|length }})</h2>
+    
+    {% set file_types = {'resume': {'icon': 'fa-file-pdf', 'label': 'Resume', 'color': 'text-red-400', 'icon_color': 'text-red-400'}, 'letter': {'icon': 'fa-file-lines', 'label': 'Application Letter', 'color': 'text-blue-400', 'icon_color': 'text-blue-400'}, 'license': {'icon': 'fa-id-card', 'label': "Driver's License", 'color': 'text-green-400', 'icon_color': 'text-green-400'}} %}
+    
+    {% if documents and (documents.resume|length + documents.letter|length + documents.license|length) > 0 %}
+    {% for ftype in ['resume', 'letter', 'license'] %}
+    {% set filtered_docs = documents.get(ftype, []) %}
+    {% if filtered_docs and filtered_docs|length > 0 %}
+    <div class="mb-5">
+        <h3 class="text-xs sm:text-sm font-semibold mb-3 flex items-center gap-2">
+            <i class="fas {{ file_types[ftype].icon }} {{ file_types[ftype].icon_color }}"></i>
+            {{ file_types[ftype].label }} ({{ filtered_docs|length }})
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {% for resume in filtered_docs %}
+            <div class="border border-gray-800 rounded-lg p-3 sm:p-4 hover:bg-gray-800/50 transition-colors">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i class="fas {{ file_types[ftype].icon }} {{ file_types[ftype].icon_color }} text-lg sm:text-xl"></i>
+                            <h4 class="text-white font-semibold text-xs sm:text-sm truncate">{{ resume.file_name }}</h4>
+                        </div>
+                        <p class="text-xs text-gray-400 mb-1">Size: {{ resume.file_size }}</p>
+                        <p class="text-xs text-gray-400">Uploaded: {{ resume.uploaded_at }}</p>
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <a href="{{ resume.view_url }}" target="_blank" 
+                       class="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-xs text-center transition-colors">
+                        <i class="fas fa-eye mr-1"></i>Preview
+                    </a>
+                    <a href="{{ resume.download_url }}" 
+                       class="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-xs text-center transition-colors">
+                        <i class="fas fa-download mr-1"></i>Download
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</section>
+{% endif %}
+                        <span class="status-badge px-2.5 py-1 rounded-full text-xs font-semibold border {{ current_status.class }}">
+                            {{ current_status.label }}
+                        </span>
+                    </td>
+                    <td class="py-4 px-2 text-gray-400 text-xs">{{ app.submitted_at|format_human_datetime if app.submitted_at else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% else %}
+<div class="card rounded-xl bg-gray-900/80 p-8 text-center text-gray-400">
+    <i class="fas fa-file-alt text-3xl mb-3 text-gray-600"></i>
+    <p class="text-sm">No applications found for this applicant.</p>
+</div>
+{% endif %}
+{% else %}
+<div class="card rounded-xl bg-gray-900/80 p-8 text-center text-gray-400">
+    <i class="fas fa-user-slash text-3xl mb-3 text-gray-600"></i>
+    <p class="text-sm">Applicant not found.</p>
+</div>
+{% endif %}
+{% endblock %}

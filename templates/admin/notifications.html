@@ -1,0 +1,372 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}Notifications • J&T Express{% endblock %}
+
+{% block content %}
+<header class="content-section card rounded-xl bg-gradient-to-r from-gray-900 via-gray-900 to-black p-3 sm:p-4 md:p-5">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div>
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2">System Notifications</h1>
+            <p class="text-gray-400 text-xs sm:text-sm md:text-base">View and manage all system-wide notifications.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="text-right">
+                <p class="text-xs sm:text-sm text-gray-500">Unread</p>
+                <p class="text-lg sm:text-xl font-bold text-red-400">{{ unread_count }}</p>
+            </div>
+            {% if unread_count > 0 %}
+            <form id="mark-all-read-form" action="{{ url_for('mark_all_admin_notifications_read') }}" method="POST" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-primary px-4 py-2 text-sm flex items-center gap-2">
+                    <i class="fas fa-check-double"></i>
+                    <span>Mark All as Read</span>
+                </button>
+            </form>
+            {% endif %}
+            <form action="{{ url_for('delete_all_admin_notifications') }}" method="POST" class="inline" onsubmit="return confirm('Delete all notifications{{ ' for your branch' if current_user and current_user.role == 'hr' else '' }}? This cannot be undone.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="px-4 py-2 text-sm flex items-center gap-2 bg-red-600/20 text-red-300 hover:text-white hover:bg-red-600/30 rounded-lg border border-red-600/30 hover:border-red-600/50 transition-all">
+                    <i class="fas fa-trash"></i>
+                    <span>Delete All</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</header>
+
+{% if notifications %}
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4">
+    <!-- Filter Tabs -->
+    <div class="mb-4 flex gap-2 border-b border-gray-800 flex-wrap">
+        <button onclick="filterNotifications('all')" id="filter-all" class="filter-tab active px-4 py-2 text-sm font-medium text-gray-300 border-b-2 border-red-500">
+            <i class="fas fa-list mr-2"></i>All ({{ notifications|length }})
+        </button>
+        <button onclick="filterNotifications('unread')" id="filter-unread" class="filter-tab px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-gray-300">
+            <i class="fas fa-envelope mr-2"></i>Unread ({{ unread_count }})
+        </button>
+        <button onclick="filterNotifications('read')" id="filter-read" class="filter-tab px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-gray-300">
+            <i class="fas fa-envelope-open mr-2"></i>Read ({{ notifications|length - unread_count }})
+        </button>
+        <button onclick="filterNotifications('application')" id="filter-application" class="filter-tab px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-gray-300">
+            <i class="fas fa-user-tie mr-2"></i>Applications ({{ application_count or 0 }})
+        </button>
+    </div>
+
+    <!-- Notifications List -->
+    <div id="notifications-list" class="space-y-3 sm:space-y-4">
+        {% for notif in notifications %}
+        {% set message = notif.message or '' %}
+        {% if not (message.strip().startswith('{') and '"success"' in message) %}
+        <div class="notification-item border border-gray-800 rounded-xl p-3 sm:p-4 flex items-start gap-3 sm:gap-4 transition-all duration-200 {% if not notif.is_read %}bg-gray-800/50 border-l-4 border-l-red-500{% else %}bg-gray-900/40{% endif %} hover:border-gray-700 hover:shadow-lg" data-read="{{ 'true' if notif.is_read else 'false' }}" data-type="{{ notif.type }}">
+            <!-- Icon -->
+            <div class="flex-shrink-0 mt-1">
+                {% if not notif.is_read %}
+                <div class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+                {% else %}
+                <i class="fas fa-check-circle text-gray-500 text-sm"></i>
+                {% endif %}
+            </div>
+            
+            <!-- Content -->
+            <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex-1">
+                        <p class="font-semibold text-sm sm:text-base text-white mb-1 {% if not notif.is_read %}font-bold{% endif %}">
+                            {{ message }}
+                        </p>
+                        <div class="flex flex-wrap items-center gap-2 text-xs text-gray-400 mt-2">
+                            {% if notif.job_title and notif.job_title != 'N/A' %}
+                            <span class="inline-flex items-center gap-1 px-2 py-1 bg-gray-800/50 rounded-md">
+                                <i class="fas fa-briefcase text-xs"></i>
+                                <span class="font-medium">{{ notif.job_title }}</span>
+                            </span>
+                            {% endif %}
+                            {% if notif.applicant_name and notif.applicant_name != 'Unknown' %}
+                            <span class="inline-flex items-center gap-1 px-2 py-1 bg-gray-800/50 rounded-md">
+                                <i class="fas fa-user text-xs"></i>
+                                <span class="font-medium">{{ notif.applicant_name }}</span>
+                            </span>
+                            {% endif %}
+                            {% if notif.application_status %}
+                            <span class="inline-flex items-center gap-1 px-2 py-1 bg-gray-800/50 rounded-md">
+                                <i class="fas fa-tag text-xs"></i>
+                                <span class="font-medium capitalize">{{ notif.application_status.replace('_', ' ') }}</span>
+                            </span>
+                            {% endif %}
+                            <span class="inline-flex items-center gap-1 text-gray-500">
+                                <i class="fas fa-clock text-xs"></i>
+                                <span>{{ notif.sent_at }}</span>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="flex-shrink-0 flex items-center gap-2">
+                        {% if not notif.is_read %}
+                        <form class="mark-read-form inline" action="{{ url_for('mark_admin_notification_read', notification_id=notif.notification_id) }}" method="POST" data-notification-id="{{ notif.notification_id }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="text-xs px-3 py-1.5 bg-red-600/20 text-red-400 hover:bg-red-600/30 rounded-lg border border-red-600/30 hover:border-red-600/50 transition-all flex items-center gap-1.5" title="Mark as Read">
+                                <i class="fas fa-check text-xs"></i>
+                                <span>Mark Read</span>
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="text-xs px-3 py-1.5 bg-gray-800/50 text-gray-500 rounded-lg border border-gray-700 flex items-center gap-1.5">
+                            <i class="fas fa-check-circle text-xs"></i>
+                            <span>Read</span>
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    
+    <!-- Empty State for Filtered Results -->
+    <div id="no-results" class="hidden text-center py-8 text-gray-400">
+        <i class="fas fa-filter text-3xl mb-3 text-gray-600"></i>
+        <p class="text-sm font-semibold">No notifications match this filter</p>
+    </div>
+</section>
+{% else %}
+<div class="content-section card rounded-2xl bg-gray-900/80 p-8 sm:p-10 text-center text-gray-400">
+    <i class="fas fa-bell-slash text-4xl sm:text-5xl mb-3 sm:mb-4 text-gray-600"></i>
+    <p class="text-base sm:text-lg font-semibold mb-2">No notifications found</p>
+    <p class="text-xs sm:text-sm mb-4">No notifications have been sent yet.</p>
+</div>
+{% endif %}
+
+<style>
+.filter-tab {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.filter-tab.active {
+    color: #ef4444;
+    border-bottom-color: #ef4444;
+}
+.notification-item {
+    animation: slideIn 0.3s ease-out;
+}
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+
+<script>
+let currentFilter = 'all';
+
+function filterNotifications(filter) {
+    currentFilter = filter;
+    const items = document.querySelectorAll('.notification-item');
+    const tabs = document.querySelectorAll('.filter-tab');
+    const noResults = document.getElementById('no-results');
+    let visibleCount = 0;
+    
+    // Update active tab
+    tabs.forEach(tab => {
+        tab.classList.remove('active', 'border-red-500', 'text-gray-300');
+        tab.classList.add('border-transparent', 'text-gray-400');
+    });
+    
+    const activeTab = document.getElementById(`filter-${filter}`);
+    if (activeTab) {
+        activeTab.classList.add('active', 'border-red-500', 'text-gray-300');
+        activeTab.classList.remove('border-transparent', 'text-gray-400');
+    }
+    
+    // Filter items
+    items.forEach(item => {
+        const isRead = item.getAttribute('data-read') === 'true';
+        const nType = item.getAttribute('data-type') || 'system';
+        let show = false;
+        
+        if (filter === 'all') {
+            show = true;
+        } else if (filter === 'unread') {
+            show = !isRead;
+        } else if (filter === 'read') {
+            show = isRead;
+        } else if (filter === 'system') {
+            show = nType === 'system';
+        } else if (filter === 'application') {
+            show = nType === 'application';
+        }
+        
+        if (show) {
+            item.style.display = 'flex';
+            visibleCount++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    // Show/hide no results message
+    if (visibleCount === 0 && items.length > 0) {
+        noResults.classList.remove('hidden');
+    } else {
+        noResults.classList.add('hidden');
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Add smooth transitions
+    const items = document.querySelectorAll('.notification-item');
+    items.forEach((item, index) => {
+        item.style.animationDelay = `${index * 0.05}s`;
+    });
+    
+    // Handle mark all as read with AJAX (prevents JSON responses from showing)
+    const markAllForm = document.getElementById('mark-all-read-form');
+    if (markAllForm) {
+        markAllForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(markAllForm);
+            
+            try {
+                const response = await fetch(markAllForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update all notification items to read state
+                    document.querySelectorAll('.notification-item').forEach(item => {
+                        item.classList.remove('bg-gray-800/50', 'border-l-4', 'border-l-red-500');
+                        item.classList.add('bg-gray-900/40');
+                        item.setAttribute('data-read', 'true');
+                        
+                        // Update the icon
+                        const iconDiv = item.querySelector('.flex-shrink-0');
+                        if (iconDiv) {
+                            iconDiv.innerHTML = '<i class="fas fa-check-circle text-gray-500 text-sm"></i>';
+                        }
+                        
+                        // Update the button to show "Read"
+                        const actionDiv = item.querySelector('.flex-shrink-0.flex.items-center.gap-2');
+                        if (actionDiv) {
+                            const form = actionDiv.querySelector('form');
+                            if (form) {
+                                actionDiv.innerHTML = `
+                                    <span class="text-xs px-3 py-1.5 bg-gray-800/50 text-gray-500 rounded-lg border border-gray-700 flex items-center gap-1.5">
+                                        <i class="fas fa-check-circle text-xs"></i>
+                                        <span>Read</span>
+                                    </span>
+                                `;
+                            }
+                        }
+                    });
+                    
+                    // Update unread count
+                    const unreadCountEl = document.querySelector('.text-lg.sm\\:text-xl.font-bold.text-red-400');
+                    if (unreadCountEl) {
+                        unreadCountEl.textContent = '0';
+                    }
+                    
+                    // Hide mark all button
+                    if (markAllForm.parentElement) {
+                        markAllForm.style.display = 'none';
+                    }
+                    
+                    // Show success message (not as notification, just a flash)
+                    const flashDiv = document.createElement('div');
+                    flashDiv.className = 'fixed top-4 right-4 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg z-50';
+                    flashDiv.innerHTML = '<i class="fas fa-check-circle mr-2"></i>All notifications marked as read.';
+                    document.body.appendChild(flashDiv);
+                    setTimeout(() => flashDiv.remove(), 3000);
+                } else {
+                    // Fallback to normal form submission on error
+                    window.location.href = markAllForm.action;
+                }
+            } catch (error) {
+                console.error('Error marking all as read:', error);
+                // Fallback to normal form submission on error
+                window.location.href = markAllForm.action;
+            }
+        });
+    }
+    
+    // Handle individual mark as read with AJAX (prevents JSON responses from showing)
+    document.querySelectorAll('.mark-read-form').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const notificationItem = form.closest('.notification-item');
+            
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && notificationItem) {
+                    // Update notification item to read state
+                    notificationItem.classList.remove('bg-gray-800/50', 'border-l-4', 'border-l-red-500');
+                    notificationItem.classList.add('bg-gray-900/40');
+                    notificationItem.setAttribute('data-read', 'true');
+                    
+                    // Update the icon
+                    const iconDiv = notificationItem.querySelector('.flex-shrink-0');
+                    if (iconDiv) {
+                        iconDiv.innerHTML = '<i class="fas fa-check-circle text-gray-500 text-sm"></i>';
+                    }
+                    
+                    // Update the button to show "Read"
+                    const actionDiv = notificationItem.querySelector('.flex-shrink-0.flex.items-center.gap-2');
+                    if (actionDiv) {
+                        actionDiv.innerHTML = `
+                            <span class="text-xs px-3 py-1.5 bg-gray-800/50 text-gray-500 rounded-lg border border-gray-700 flex items-center gap-1.5">
+                                <i class="fas fa-check-circle text-xs"></i>
+                                <span>Read</span>
+                            </span>
+                        `;
+                    }
+                    
+                    // Update unread count
+                    const unreadCountEl = document.querySelector('.text-lg.sm\\:text-xl.font-bold.text-red-400');
+                    if (unreadCountEl) {
+                        const currentCount = parseInt(unreadCountEl.textContent) || 0;
+                        const newCount = Math.max(0, currentCount - 1);
+                        unreadCountEl.textContent = newCount;
+                        
+                        // Hide mark all button if no unread notifications
+                        if (newCount === 0 && markAllForm) {
+                            markAllForm.style.display = 'none';
+                        }
+                    }
+                } else {
+                    // Fallback to normal form submission on error
+                    window.location.href = form.action;
+                }
+            } catch (error) {
+                console.error('Error marking notification as read:', error);
+                // Fallback to normal form submission on error
+                window.location.href = form.action;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

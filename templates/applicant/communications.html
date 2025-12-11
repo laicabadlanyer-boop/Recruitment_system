@@ -1,0 +1,183 @@
+{% extends "applicant/_base.html" %}
+
+{% block title %}Notifications • Applicant{% endblock %}
+
+{% block extra_css %}
+<style>
+    .notification-card {
+        border-radius: 1.25rem;
+        padding: 1.25rem;
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(14px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set notifications = notifications or [] %}
+<section class="space-y-6">
+    <header class="glass-panel rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+            <p class="text-xs uppercase tracking-[0.4em] text-slate-400">Notification center</p>
+            <h1 class="text-3xl font-semibold text-white">Messages & Updates</h1>
+            <p class="text-slate-400 text-sm mt-2">Stay on top of HR updates and interview alerts.</p>
+        </div>
+        <div class="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center w-full lg:w-auto">
+            <span class="px-4 py-2 rounded-2xl bg-white/10 text-white text-sm font-semibold">
+                {{ unread_count }} unread
+            </span>
+            <form id="mark-all-form" method="post" action="{{ url_for('mark_all_notifications_read') }}" class="w-full sm:w-auto">
+                <input type="hidden" id="csrf-mark-all" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="w-full sm:w-auto px-5 py-3 rounded-2xl border border-white/20 text-sm font-semibold text-white/80 hover:text-white">Mark all as read</button>
+            </form>
+            <form id="delete-all-form" method="post" action="{{ url_for('delete_all_applicant_notifications') }}" class="w-full sm:w-auto" onsubmit="return confirm('Delete all notifications? This cannot be undone.');">
+                <input type="hidden" id="csrf-delete-all" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="w-full sm:w-auto px-5 py-3 rounded-2xl border border-red-500/40 bg-red-600/10 text-sm font-semibold text-red-300 hover:text-white hover:bg-red-600/20">
+                    Delete all
+                </button>
+            </form>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 gap-6">
+        <section class="space-y-4">
+            {% if notifications %}
+            {% for note in notifications %}
+            <article class="notification-card flex gap-4 {{ '' if note.is_read else 'border border-emerald-400/40' }}" data-notification-id="{{ note.notification_id }}" data-is-read="{{ '1' if note.is_read else '0' }}">
+                <div class="w-10 h-10 rounded-2xl flex items-center justify-center {{ 'bg-slate-500/20 text-slate-200' if note.is_read else 'bg-emerald-500/20 text-emerald-200' }}">
+                    <i class="fas {{ 'fa-envelope-open' if note.is_read else 'fa-message' }}"></i>
+                </div>
+                <div class="flex-1">
+                        <div class="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                            <p class="text-white font-semibold">{{ note.job_title or 'System Message' }}</p>
+                            <p class="text-xs text-slate-400">{{ note.application_status|replace('_',' ')|title }}</p>
+                        </div>
+                        <span class="text-xs text-slate-500">{{ note.sent_at }}</span>
+                    </div>
+                    <p class="text-slate-300 text-sm mt-3 whitespace-pre-line">{{ note.message }}</p>
+                    <div class="flex gap-3 mt-4">
+                        {% if not note.is_read %}
+                        <form id="mark-read-{{ note.notification_id }}" method="post" action="{{ url_for('mark_notification_read', notification_id=note.notification_id) }}">
+                            <input type="hidden" id="csrf-read-{{ note.notification_id }}" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="px-4 py-2 rounded-2xl bg-emerald-500/80 hover:bg-emerald-500 text-white text-xs font-semibold">
+                                Mark as read
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+            {% else %}
+            <div class="glass-panel rounded-2xl p-12 border border-dashed border-white/15 text-center text-slate-400 text-sm">
+                No notifications yet.
+            </div>
+            {% endif %}
+        </section>
+
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Utility to update unread counters in-page and header
+  function setUnreadCount(newCount) {
+    // Header badge
+    const headerBadge = document.querySelector('.notification-badge');
+    if (headerBadge) {
+      if (newCount > 0) {
+        headerBadge.textContent = newCount;
+        headerBadge.style.display = '';
+      } else {
+        headerBadge.style.display = 'none';
+      }
+    }
+    // Page pill
+    const pill = document.querySelector('header .px-4.py-2.rounded-2xl');
+    if (pill) { pill.textContent = `${newCount} unread`; }
+  }
+  function getCurrentUnread() {
+    const cardUnread = document.querySelectorAll('.notification-card[data-is-read="0"]').length;
+    return cardUnread;
+  }
+  function updateCardToRead(card) {
+    if (!card) return;
+    card.setAttribute('data-is-read', '1');
+    card.classList.remove('border', 'border-emerald-400/40');
+    // Icon color change
+    const iconWrap = card.querySelector('.w-10.h-10.rounded-2xl');
+    if (iconWrap) {
+      iconWrap.classList.remove('bg-emerald-500/20', 'text-emerald-200');
+      iconWrap.classList.add('bg-slate-500/20', 'text-slate-200');
+    }
+    const icon = card.querySelector('.w-10.h-10 i');
+    if (icon) {
+      icon.classList.remove('fa-message');
+      icon.classList.add('fa-envelope-open');
+    }
+    // Remove button form
+    const form = card.querySelector('form[id^="mark-read-"]');
+    if (form) form.remove();
+  }
+
+  // Intercept single "mark as read" submits
+  document.querySelectorAll('form[id^="mark-read-"]').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const action = form.getAttribute('action');
+      const fd = new FormData(form);
+      try {
+        const res = await fetch(action, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+          body: fd
+        });
+        const ok = res.ok;
+        let data = {};
+        try { data = await res.json(); } catch (e) {}
+        if (ok && data && data.success) {
+          const card = form.closest('.notification-card');
+          updateCardToRead(card);
+          setUnreadCount(getCurrentUnread());
+        } else {
+          // Fallback: do normal submission if server didn't return JSON success
+          form.submit();
+        }
+      } catch (err) {
+        form.submit();
+      }
+    });
+  });
+
+  // Intercept "Mark all as read"
+  const markAllForm = document.getElementById('mark-all-form');
+  if (markAllForm) {
+    markAllForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(markAllForm);
+      try {
+        const res = await fetch(markAllForm.getAttribute('action'), {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+          body: fd
+        });
+        let data = {};
+        try { data = await res.json(); } catch (e) {}
+        if (res.ok && data && data.success) {
+          document.querySelectorAll('.notification-card').forEach(updateCardToRead);
+          setUnreadCount(0);
+        } else {
+          markAllForm.submit();
+        }
+      } catch (err) {
+        markAllForm.submit();
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

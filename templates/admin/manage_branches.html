@@ -1,0 +1,480 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}Manage Branches • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sidebar-item.active { border-color: #dc2626; background: rgba(220,38,38,.12); }
+    </style>
+{% endblock %}
+
+{% block content %}
+<header class="card rounded-xl bg-gradient-to-r from-gray-900 via-gray-900 to-black p-3 sm:p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2 sm:gap-3">
+    <div class="min-w-0 flex-1">
+        <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2">Branch Management</h1>
+        <p class="text-gray-400 text-xs sm:text-sm md:text-base">Manage all J&T Express branches with complete details and performance metrics.</p>
+        <p class="text-xs sm:text-sm text-gray-500 mt-2">Total branches: <span class="font-semibold text-white">{{ total_branches }}</span></p>
+                                </div>
+    <button onclick="openAddModal()" class="btn-primary px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg whitespace-nowrap">
+        <i class="fas fa-plus"></i>
+        <span class="hidden sm:inline">Add New Branch</span>
+        <span class="sm:hidden">Add Branch</span>
+                        </button>
+</header>
+
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4">
+    <div class="flex flex-col md:flex-row gap-2 sm:gap-3 mb-3 sm:mb-4">
+        <div class="relative flex-1">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none z-10"></i>
+            <label for="search-input" class="sr-only">Search branches</label>
+            <input 
+                type="text" 
+                id="search-input" 
+                name="keyword" 
+                autocomplete="off" 
+                placeholder="Search by branch, address..." 
+                aria-label="Search branches" 
+                value="{{ current_filters.get('keyword', '') if current_filters else '' }}" 
+                class="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none placeholder-gray-500"
+            >
+        </div>
+        <label for="status-filter" class="sr-only">Filter by status</label>
+        <select 
+            id="status-filter" 
+            name="status" 
+            autocomplete="off" 
+            aria-label="Filter by status" 
+            class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-4 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+        >
+            <option value="all" {% if not current_filters or current_filters.get('status') == 'all' or current_filters.get('status') == '' %}selected{% endif %}>All Status</option>
+            <option value="active" {% if current_filters and current_filters.get('status') == 'active' %}selected{% endif %}>Active</option>
+            <option value="inactive" {% if current_filters and current_filters.get('status') == 'inactive' %}selected{% endif %}>Inactive</option>
+        </select>
+    </div>
+
+                    {% if branches %}
+                    <div class="table-container">
+        <table class="w-full text-sm min-w-[1000px]">
+                            <thead>
+                <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-800">
+                    <th class="py-3 text-left px-2">Branch</th>
+                    <th class="py-3 text-left px-2 hidden md:table-cell">Address</th>
+                    <th class="py-3 text-left px-2 hidden xl:table-cell">Operating Hours</th>
+                    <th class="py-3 text-left px-2 hidden md:table-cell">Active Jobs</th>
+                    <th class="py-3 text-left px-2 hidden xl:table-cell">Applications</th>
+                    <th class="py-3 text-left px-2">Status</th>
+                    <th class="py-3 text-left px-2">Actions</th>
+                                </tr>
+                            </thead>
+            <tbody class="divide-y divide-gray-800">
+                                {% for branch in branches %}
+                <tr class="branch-row hover:bg-gray-800/50 transition-colors" data-status="{{ 'active' if branch.is_active else 'inactive' }}" data-name="{{ branch.branch_name|lower }}" data-address="{{ branch.address|lower }}">
+                    <td class="py-4 px-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-red-600/20 border border-red-600/30 flex items-center justify-center">
+                                <i class="fas fa-building text-red-400"></i>
+                                            </div>
+                                            <div>
+                                <p class="font-semibold text-white">{{ branch.branch_name }}</p>
+                                <p class="text-xs text-gray-400 md:hidden">{{ branch.address[:30] }}{% if branch.address|length > 30 %}...{% endif %}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                    <td class="py-4 px-2 hidden md:table-cell text-gray-300">{{ branch.address }}</td>
+                    <td class="py-4 px-2 hidden xl:table-cell text-gray-300">{{ branch.operating_hours or 'Not set' }}</td>
+                    <td class="py-4 px-2 hidden md:table-cell">
+                        <span class="px-2 py-1 rounded-full bg-green-600/20 text-green-400 text-xs">{{ branch.active_jobs or 0 }} jobs</span>
+                                    </td>
+                    <td class="py-4 px-2 hidden xl:table-cell">
+                        <span class="px-2 py-1 rounded-full bg-purple-600/20 text-purple-400 text-xs">{{ branch.total_applications or 0 }} total</span>
+                        {% if branch.accepted_applications %}
+                        <span class="px-2 py-1 rounded-full bg-green-600/20 text-green-400 text-xs ml-1">{{ branch.accepted_applications }} hired</span>
+                        {% endif %}
+                                    </td>
+                    <td class="py-4 px-2">
+                        <span class="px-2 py-1 rounded-full text-xs {{ 'bg-green-600/20 text-green-400' if branch.is_active else 'bg-red-600/20 text-red-400' }}">
+                                            {{ 'Active' if branch.is_active else 'Inactive' }}
+                                        </span>
+                                    </td>
+                    <td class="py-4 px-2">
+                        <div class="flex items-center gap-2">
+                            <button onclick="openEditModal({{ branch.id }})" class="p-2 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors" title="Edit">
+                                                <i class="fas fa-edit text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+            </div>
+
+            <!-- Mobile Card View -->
+    <div class="md:hidden space-y-4 mt-4">
+                    {% for branch in branches %}
+        <div class="border border-gray-800 bg-gray-800/70 rounded-xl p-4 branch-card" data-status="{{ 'active' if branch.is_active else 'inactive' }}" data-name="{{ branch.branch_name|lower }}" data-address="{{ branch.address|lower }}">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center gap-3 flex-1">
+                    <div class="w-10 h-10 rounded-lg bg-red-600/20 border border-red-600/30 flex items-center justify-center">
+                                    <i class="fas fa-building text-red-400"></i>
+                                </div>
+                                <div class="flex-1">
+                        <p class="font-semibold text-white">{{ branch.branch_name }}</p>
+                        <p class="text-xs text-gray-400 mt-1">{{ branch.address }}</p>
+                                </div>
+                            </div>
+                <span class="px-2 py-1 rounded-full text-xs {{ 'bg-green-600/20 text-green-400' if branch.is_active else 'bg-red-600/20 text-red-400' }}">
+                                {{ 'Active' if branch.is_active else 'Inactive' }}
+                            </span>
+                        </div>
+            <div class="grid grid-cols-2 gap-3 text-xs text-gray-400 mb-3">
+                <div><i class="fas fa-users text-blue-400"></i> {{ branch.hr_count or 0 }} HR</div>
+                <div><i class="fas fa-briefcase text-green-400"></i> {{ branch.active_jobs or 0 }} jobs</div>
+                <div><i class="fas fa-file-alt text-purple-400"></i> {{ branch.total_applications or 0 }} apps</div>
+                            </div>
+            {% if branch.operating_hours %}
+            <div class="text-xs text-gray-400 mb-3"><i class="fas fa-clock text-yellow-400"></i> {{ branch.operating_hours }}</div>
+            {% endif %}
+            <div class="flex items-center gap-2 pt-3 border-t border-gray-800">
+                <button onclick="openEditModal({{ branch.id }})" class="flex-1 px-3 py-2 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors text-xs">Edit</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+    </div>
+                {% else %}
+    <div class="rounded-xl border border-dashed border-gray-700 bg-gray-900/40 p-10 text-center text-gray-400">
+        <i class="fas fa-code-branch text-4xl mb-3 text-gray-600"></i>
+        <p class="text-lg font-semibold mb-2">No branches found</p>
+        <p class="text-sm mb-4">Get started by adding your first branch location.</p>
+        <button onclick="openAddModal()" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 transition-colors font-semibold text-sm">Add First Branch</button>
+                    </div>
+                {% endif %}
+</section>
+
+    <!-- Add/Edit Branch Modal -->
+<div id="branch-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+        <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+            <h3 class="text-lg sm:text-xl font-bold" id="modal-title">Add New Branch</h3>
+            <button onclick="closeModal('branch-modal')" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+                <i class="fas fa-times text-lg"></i>
+                    </button>
+                </div>
+        <form method="POST" action="{{ url_for('manage_branches') }}" class="p-4 sm:p-6 space-y-4 sm:space-y-5" id="branch-form" onsubmit="return submitBranchForm(event)">
+            <input type="hidden" name="action" id="form-action" value="add">
+            <input type="hidden" name="branch_id" id="branch-id">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div>
+                    <label for="branch-name" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Branch Name *</label>
+                    <input type="text" name="branch_name" id="branch-name" autocomplete="organization" required class="w-full form-input px-3 py-2 rounded-lg">
+                    </div>
+
+                <div>
+                <label for="address" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Full Address *</label>
+                <textarea name="address" id="address" autocomplete="street-address" required rows="2" class="w-full form-input px-3 py-2 rounded-lg"></textarea>
+                </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                    <label for="operating-hours" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Operating Hours</label>
+                    <input type="text" name="operating_hours" id="operating-hours" autocomplete="off" placeholder="e.g., Mon-Fri 8AM-5PM" class="w-full form-input px-3 py-2 rounded-lg">
+                    </div>
+                    <div>
+                    <label for="branch-status" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Status *</label>
+                    <select name="is_active" id="branch-status" required class="w-full form-input px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none">
+                        <option value="1" selected>Active</option>
+                        <option value="0">Inactive</option>
+                    </select>
+                    </div>
+                </div>
+
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-800 sticky bottom-0 bg-gray-900/95 backdrop-blur-md">
+                <button type="button" onclick="closeModal('branch-modal')" class="px-4 py-2.5 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium order-2 sm:order-1">Cancel</button>
+                <button type="submit" id="submit-branch-btn" class="btn-primary px-6 py-2.5 rounded-lg font-semibold text-sm shadow-lg order-1 sm:order-2">Save Branch</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+    <script>
+    // Search and filter with URL parameters
+    function applyFilters() {
+        const searchInput = document.getElementById('search-input');
+        const statusFilter = document.getElementById('status-filter');
+        const keyword = searchInput?.value || '';
+        const status = statusFilter?.value || 'all';
+        
+        // Build URL with filters
+        const params = new URLSearchParams();
+        if (keyword.trim()) {
+            params.set('keyword', keyword.trim());
+        }
+        if (status && status !== 'all') {
+            params.set('status', status);
+        }
+        
+        // Update URL and reload
+        const url = new URL(window.location.href);
+        url.search = params.toString();
+        window.location.href = url.toString();
+    }
+    
+    // Debounce search input to avoid too many requests
+    let searchTimeout;
+    document.getElementById('search-input')?.addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            applyFilters();
+        }, 500); // Wait 500ms after user stops typing
+    });
+    
+    // Apply filters immediately on status change
+    document.getElementById('status-filter')?.addEventListener('change', function(e) {
+        applyFilters();
+    });
+    
+    // Allow Enter key to submit search immediately
+    document.getElementById('search-input')?.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            clearTimeout(searchTimeout);
+            applyFilters();
+        }
+    });
+
+        // Make functions globally accessible
+    window.openAddModal = function() {
+        const modalTitle = document.getElementById('modal-title');
+        const formAction = document.getElementById('form-action');
+        const branchForm = document.getElementById('branch-form');
+        const branchId = document.getElementById('branch-id');
+        const branchName = document.getElementById('branch-name');
+        const address = document.getElementById('address');
+        const operatingHours = document.getElementById('operating-hours');
+        const branchStatus = document.getElementById('branch-status');
+        const submitBtn = document.getElementById('submit-branch-btn');
+        
+        if (modalTitle) modalTitle.textContent = 'Add New Branch';
+        if (formAction) formAction.value = 'add';
+        if (submitBtn) submitBtn.textContent = 'Save Branch';
+        if (branchForm) branchForm.reset();
+        if (branchId) branchId.value = '';
+        if (branchName) branchName.value = '';
+        if (address) address.value = '';
+        if (operatingHours) operatingHours.value = '';
+        if (branchStatus) branchStatus.value = '1'; // Set to Active by default
+        
+        if (typeof openModal === 'function') {
+            openModal('branch-modal');
+        } else if (typeof window.openModal === 'function') {
+            window.openModal('branch-modal');
+        } else {
+            const modal = document.getElementById('branch-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    };
+    
+    window.openEditModal = function(branchId) {
+        const branches = {% if branches %}{{ branches|tojson|safe }}{% else %}[]{% endif %};
+        const branch = branches.find(b => (b.branch_id == branchId || b.branch_id == parseInt(branchId)) || (b.id == branchId || b.id == parseInt(branchId)));
+        if (!branch) {
+            // Silently handle error - branch not found
+            alert('Branch not found. Please refresh the page and try again.');
+            return;
+        }
+        
+        const modalTitle = document.getElementById('modal-title');
+        const formAction = document.getElementById('form-action');
+        const branchIdField = document.getElementById('branch-id');
+        const branchName = document.getElementById('branch-name');
+        const address = document.getElementById('address');
+        const operatingHours = document.getElementById('operating-hours');
+        const branchStatus = document.getElementById('branch-status');
+        const submitBtn = document.getElementById('submit-branch-btn');
+        
+        if (modalTitle) modalTitle.textContent = 'Edit Branch';
+        if (formAction) formAction.value = 'update';
+        if (submitBtn) submitBtn.textContent = 'Update Branch';
+        if (branchIdField) branchIdField.value = branch.branch_id || branch.id;
+        if (branchName) branchName.value = branch.branch_name || '';
+        if (address) address.value = branch.address || '';
+        
+        // Fix operating hours - handle null/undefined/empty values properly
+        if (operatingHours) {
+            // Get operating hours value from branch object
+            // Handle all cases: null, undefined, empty string, or missing field
+            // Use nullish coalescing and logical OR to handle all cases
+            const rawValue = branch.operating_hours || branch.operatingHours || null;
+            
+            // Convert to string and trim, or use empty string if null/undefined/empty
+            const operatingHoursValue = (rawValue != null && rawValue !== '') 
+                ? String(rawValue).trim() 
+                : '';
+            
+            // Always explicitly set the value (even if empty) to ensure field displays correctly
+            // This is critical when operating_hours is null in the database
+            operatingHours.value = operatingHoursValue;
+            
+            // Ensure the field is visible and properly initialized
+            operatingHours.style.display = '';
+        }
+        
+        // Fix status - properly handle boolean values for dropdown
+        if (branchStatus) {
+            const isActiveValue = branch.is_active;
+            // Handle different possible values: true, 1, '1', 'on', etc.
+            if (isActiveValue === true || isActiveValue === 1 || isActiveValue === '1' || isActiveValue === 'on') {
+                branchStatus.value = '1'; // Active
+            } else if (isActiveValue === false || isActiveValue === 0 || isActiveValue === '0' || isActiveValue === 'off') {
+                branchStatus.value = '0'; // Inactive
+            } else {
+                // Default to Active if not explicitly false
+                branchStatus.value = '1';
+            }
+        }
+        
+        if (typeof openModal === 'function') {
+            openModal('branch-modal');
+        } else if (typeof window.openModal === 'function') {
+            window.openModal('branch-modal');
+        } else {
+            const modal = document.getElementById('branch-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    };
+    
+    // AJAX form submission to avoid redirect page
+    function submitBranchForm(event) {
+        event.preventDefault();
+        const form = event.target;
+        
+        // Get form action URL - use getAttribute to avoid conflicts with form.action property
+        const formAction = form.getAttribute('action') || form.action;
+        
+        // Ensure form has a valid action URL
+        if (!formAction || typeof formAction !== 'string' || formAction.trim() === '') {
+            console.error('Form action is missing or invalid:', formAction);
+            alert('Form action URL is missing. Please refresh the page and try again.');
+            return false;
+        }
+        
+        const formData = new FormData(form);
+        const submitButton = form.querySelector('button[type="submit"]');
+        const originalText = submitButton ? submitButton.innerHTML : '';
+        
+        // Disable submit button
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+        }
+        
+        console.log('Submitting form to:', formAction);
+        
+        fetch(formAction, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            const isJson = contentType && contentType.includes('application/json');
+            
+            if (response.ok) {
+                if (isJson) {
+                    return response.json().then(data => {
+                        if (data.success) {
+                            // Close modal
+                            if (typeof closeModal === 'function') {
+                                closeModal('branch-modal');
+                            } else if (typeof window.closeModal === 'function') {
+                                window.closeModal('branch-modal');
+                            } else {
+                                const modal = document.getElementById('branch-modal');
+                                if (modal) {
+                                    modal.classList.add('hidden');
+                                    document.body.style.overflow = '';
+                                }
+                            }
+                            // Reload page to show updated data and flash messages
+                            window.location.reload();
+                        } else {
+                            // Show error message
+                            alert(data.error || 'An error occurred. Please try again.');
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.innerHTML = originalText;
+                            }
+                        }
+                    });
+                } else {
+                    // Not JSON, might be HTML redirect - just reload
+                    window.location.reload();
+                }
+            } else {
+                // Error response - try to get JSON error message
+                if (isJson) {
+                    return response.json().then(data => {
+                        alert(data.error || 'An error occurred. Please try again.');
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.innerHTML = originalText;
+                        }
+                    });
+                } else {
+                    // Not JSON, try to parse HTML for error or redirect
+                    return response.text().then(html => {
+                        // Check if it's a redirect page
+                        if (html.includes('Redirecting') || html.includes('target URL')) {
+                            const urlMatch = html.match(/target URL: ([^\s<]+)/);
+                            if (urlMatch) {
+                                window.location.href = urlMatch[1];
+                            } else {
+                                window.location.reload();
+                            }
+                        } else {
+                            // Try to extract error message from HTML
+                            const errorMatch = html.match(/<div[^>]*class="[^"]*error[^"]*"[^>]*>([^<]+)<\/div>/i);
+                            if (errorMatch) {
+                                alert(errorMatch[1] || 'An error occurred. Please try again.');
+                            } else {
+                                alert('An error occurred. Please check the console for details.');
+                            }
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.innerHTML = originalText;
+                            }
+                        }
+                    });
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error submitting form:', error);
+            console.error('Form action URL:', form.action);
+            console.error('Error details:', error.message, error.stack);
+            alert('An error occurred while saving the branch. Please check the browser console (F12) for details and try again.');
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalText;
+            }
+        });
+        
+        return false;
+    }
+    
+    </script>
+{% endblock %}

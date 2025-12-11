@@ -1,0 +1,872 @@
+{% extends "hr/_base.html" %}
+
+{% block title %}Interviews • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.85);
+    opacity: 0;
+    transition: opacity 0.25s ease-out;
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    overflow-y: auto;
+    padding: 1rem;
+  }
+  .modal-overlay.show { opacity: 1; }
+  .modal-content {
+    width: 100%;
+    max-width: 56rem;
+    max-height: 95vh;
+    background: rgba(17,24,39,0.98);
+    border: 1px solid rgba(220,38,38,0.3);
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    overflow-y: auto;
+    margin: auto;
+    animation: modalFadeIn 0.25s ease-out;
+  }
+  .modal-large {
+    max-width: 80rem;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.98) translateY(-6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid;
+  }
+  .interview-event {
+    padding: 0.25rem 0.5rem;
+    margin: 0.25rem 0;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .interview-event:hover {
+    transform: translateX(4px);
+  }
+  .rating-star {
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  .rating-star:hover {
+    color: #fbbf24;
+  }
+  .rating-star.active {
+    color: #fbbf24;
+  }
+  .today-row-highlight {
+    border-left: 3px solid #f87171;
+    background: rgba(248,113,113,0.08);
+  }
+  .today-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 9999px;
+    background: rgba(248,113,113,0.15);
+    color: #f87171;
+    font-size: 0.65rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set interviews = interviews if interviews is defined else [] %}
+{% set upcoming = upcoming if upcoming is defined else [] %}
+{% set past = past if past is defined else [] %}
+{% set applications = applications if applications is defined else [] %}
+{% set hr_interviewers = hr_interviewers if hr_interviewers is defined else [] %}
+{% set interview_stats = interview_stats if interview_stats is defined else {} %}
+{% set positions = positions if positions is defined else [] %}
+{% set jobs = jobs if jobs is defined else [] %}
+{% set applicants = applicants if applicants is defined else [] %}
+{% set filters = current_filters if current_filters is defined else {} %}
+{% set view_mode = filters.get('view_mode', 'list') %}
+{% set branch_info = branch_info if branch_info is defined else None %}
+{% set branches = branches if branches is defined else [] %}
+
+<!-- 1. HEADER: Interviews + Schedule New Interview Button -->
+<header class="card rounded-2xl bg-gradient-to-r from-black via-gray-900 to-gray-900 p-6 mb-6 shadow-lg border border-red-600/20">
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+      <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2">Interviews</h1>
+      <p class="text-gray-400 text-sm">Manage and coordinate all interview schedules</p>
+        </div>
+    <a href="{{ url_for('hr_interviews') }}?action=schedule" class="btn-primary px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-lg flex items-center gap-2">
+            <i class="fas fa-plus"></i>
+      <span>Schedule New Interview</span>
+        </a>
+    </div>
+</header>
+
+<!-- 2. INTERVIEW STATISTICS -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  <div class="card rounded-2xl bg-gray-900/80 p-5 border border-gray-800">
+    <p class="text-xs uppercase tracking-wide text-gray-400 mb-2">Total Scheduled</p>
+    <p class="text-3xl font-bold text-white">{{ interview_stats.get('total_scheduled', 0) }}</p>
+    <p class="text-xs text-gray-500 mt-2">All interviews</p>
+    </div>
+  <div class="card rounded-2xl bg-gray-900/80 p-5 border border-gray-800">
+    <p class="text-xs uppercase tracking-wide text-gray-400 mb-2">Completed This Week</p>
+    <p class="text-3xl font-bold text-red-400">{{ interview_stats.get('completed_this_week', 0) }}</p>
+    <p class="text-xs text-gray-500 mt-2">Last 7 days</p>
+    </div>
+</section>
+
+<!-- 4. INTERVIEWS LIST -->
+<section class="card rounded-2xl bg-gray-900/80 border border-gray-800 overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+    <h2 class="text-lg font-bold text-white">Interviews List</h2>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-800/70 text-gray-300 uppercase text-xs border-b border-gray-700">
+        <tr>
+          <th class="px-6 py-4 text-left">Applicant Name & Job Position</th>
+          <th class="px-6 py-4 text-left">Interview Date & Time</th>
+          <th class="px-6 py-4 text-left">Interview Type</th>
+          <th class="px-6 py-4 text-center">Status</th>
+          <th class="px-6 py-4 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+        {% for interview in interviews %}
+        {% set status = (interview.interview_status or 'scheduled')|lower %}
+        {% set status_class = {
+          'scheduled': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30',
+          'completed': 'bg-green-600/20 text-green-400 border-green-600/30',
+          'cancelled': 'bg-red-600/20 text-red-400 border-red-600/30',
+          'rescheduled': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30',
+          'no_show': 'bg-gray-600/20 text-gray-400 border-gray-600/30',
+          'in_progress': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30'
+        }.get(status, 'bg-gray-600/20 text-gray-400 border-gray-600/30') %}
+        <tr class="hover:bg-gray-800/50 transition-colors" 
+            data-interview-row="{{ interview.interview_id }}" 
+            data-job="{{ interview.job_title }}" 
+            data-applicant="{{ interview.applicant_name }}"
+            data-status="{{ interview.interview_status or 'scheduled' }}">
+          <td class="px-6 py-4">
+            <div>
+              <p class="font-semibold text-white">{{ interview.applicant_name }}</p>
+              <p class="text-xs text-gray-400">{{ interview.job_title }}</p>
+            </div>
+                    </td>
+          <td class="px-6 py-4 text-gray-300" data-date-cell="true">
+            <p class="text-sm">{{ interview.scheduled_date }}</p>
+            {% set _loc = (interview.location or '')|trim %}
+            {% if _loc and _loc|lower not in ['unassigned', 'unassigned branch'] %}
+            <p class="text-xs text-gray-500">{{ _loc }}</p>
+            {% else %}
+            <p class="text-xs text-gray-500">{{ (interview.interview_mode or 'in_person')|replace('_', ' ')|title }}</p>
+            {% endif %}
+                    </td>
+          <td class="px-6 py-4 text-gray-300">
+            {% set interview_type = (interview.interview_mode or 'in-person')|lower %}
+            {% if interview_type == 'phone' %}
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-800 text-gray-300 text-xs">
+              <i class="fas fa-phone"></i> Phone
+            </span>
+            {% elif interview_type in ['online', 'video', 'remote'] %}
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-800 text-gray-300 text-xs">
+              <i class="fas fa-video"></i> Video
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-800 text-gray-300 text-xs">
+              <i class="fas fa-user"></i> In-Person
+            </span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 text-center">
+            <span class="status-badge {{ status_class }}">
+              {{ status|replace('_', ' ')|title }}
+            </span>
+          </td>
+          <td class="px-6 py-4 text-right">
+            <div class="flex items-center justify-end gap-2">
+              {% if status == 'scheduled' %}
+              <button onclick="window.markCompleted({{ interview.interview_id }})" class="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors" title="Mark as Completed">
+                <i class="fas fa-check"></i>
+              </button>
+              <button onclick="window.rescheduleInterview({{ interview.interview_id }})" class="px-3 py-1.5 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors" title="Reschedule">
+                <i class="fas fa-calendar-alt"></i>
+              </button>
+              <button onclick="window.cancelInterview({{ interview.interview_id }})" class="px-3 py-1.5 text-xs bg-red-800 hover:bg-red-900 text-white rounded-lg transition-colors" title="Cancel">
+                <i class="fas fa-times"></i>
+              </button>
+                            {% endif %}
+              <button onclick="window.deleteInterview({{ interview.interview_id }})" class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-800 text-white rounded-lg transition-colors" title="Delete Interview">
+                <i class="fas fa-trash"></i>
+              </button>
+                        </div>
+                    </td>
+                </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="px-6 py-16 text-center text-gray-400">
+            <i class="fas fa-calendar-times text-4xl mb-4 text-gray-600"></i>
+            <p class="text-lg font-semibold">No interviews found</p>
+            <p class="text-sm text-gray-500 mt-2">Schedule your first interview to get started</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Schedule Interviewed Modal -->
+<div id="schedule-modal" class="modal-overlay hidden">
+  <div class="modal-content max-w-2xl">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+      <h3 class="text-lg font-semibold text-white" id="schedule-modal-title">Schedule Interview</h3>
+      <button type="button" class="text-gray-400 hover:text-white" onclick="window.closeModal('schedule-modal')">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <form id="schedule-form" method="POST" action="{{ url_for('hr_interviews') }}" class="p-6 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="schedule">
+      <input type="hidden" name="application_id" id="schedule-application-id">
+      <div>
+        <label for="schedule-applicant-id" class="block text-sm font-medium text-gray-300 mb-2">Applicant *</label>
+        <select id="schedule-applicant-id" name="applicant_id" class="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:ring-2 focus:ring-red-500 focus:border-red-500" required>
+          <option value="">Select applicant</option>
+          {% for applicant in applicants_for_schedule %}
+          <option value="{{ applicant.applicant_id }}" data-branch-name="{{ applicant.branch_name or '' }}">{{ applicant.applicant_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="schedule-date" class="block text-sm font-medium text-gray-300 mb-2">Date *</label>
+          <input type="date" id="schedule-date" name="scheduled_date" class="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:ring-2 focus:ring-red-500 focus:border-red-500" required>
+        </div>
+        <div>
+          <label for="schedule-time" class="block text-sm font-medium text-gray-300 mb-2">Time *</label>
+          <input type="time" id="schedule-time" name="scheduled_time" class="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:ring-2 focus:ring-red-500 focus:border-red-500" required>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <span class="block text-sm font-medium text-gray-300 mb-2">Interview Mode</span>
+          <div class="w-full px-4 py-2.5 rounded-lg bg-gray-800/50 border border-gray-700 text-gray-300">In-Person</div>
+          <input type="hidden" id="schedule-mode-hidden" name="interview_mode" value="in-person">
+        </div>
+        <div>
+          <label for="schedule-location" class="block text-sm font-medium text-gray-300 mb-2">Location *</label>
+          <input type="text" id="schedule-location" name="location" required readonly class="w-full px-4 py-2.5 rounded-lg bg-gray-800/50 border border-gray-700 text-gray-300 cursor-not-allowed" placeholder="Select an applicant to auto-fill location">
+        </div>
+      </div>
+      <div>
+        <label for="schedule-notes" class="block text-sm font-medium text-gray-300 mb-2">Notes</label>
+        <textarea id="schedule-notes" name="notes" rows="3" placeholder="Add instructions or important reminders..." class="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+      </div>
+      <div class="flex items-center justify-end gap-3 pt-2 border-t border-gray-800">
+        <button type="button" class="px-5 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700" onclick="window.closeModal('schedule-modal')">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold">Schedule Interview</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Reschedule Modal -->
+<div id="reschedule-modal" class="modal-overlay hidden">
+  <div class="modal-content max-w-2xl">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+      <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+        <i class="fas fa-calendar-alt text-red-400"></i>
+        Reschedule Interview
+      </h3>
+      <button type="button" class="text-gray-400 hover:text-white" onclick="window.closeModal('reschedule-modal')">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <form id="reschedule-form" method="POST" action="{{ url_for('hr_interviews') }}" class="p-6 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="reschedule">
+      <input type="hidden" name="interview_id" id="reschedule-interview-id">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="reschedule-date" class="block text-sm font-medium text-gray-300 mb-2">New Date</label>
+          <input type="date" id="reschedule-date" name="scheduled_date" class="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:ring-2 focus:ring-red-500 focus:border-red-500" required>
+        </div>
+        <div>
+          <label for="reschedule-time" class="block text-sm font-medium text-gray-300 mb-2">New Time</label>
+          <input type="time" id="reschedule-time" name="scheduled_time" class="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:ring-2 focus:ring-red-500 focus:border-red-500" required>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <span class="block text-sm font-medium text-gray-300 mb-2">Interview Mode</span>
+          <div class="w-full px-4 py-2.5 rounded-lg bg-gray-800/50 border border-gray-700 text-gray-300">In-Person</div>
+          <input type="hidden" id="reschedule-mode" name="interview_mode" value="in-person">
+        </div>
+      </div>
+      <div>
+        <label for="reschedule-location" class="block text-sm font-medium text-gray-300 mb-2">Location *</label>
+        <input type="text" id="reschedule-location" name="location" required readonly class="w-full px-4 py-2.5 rounded-lg bg-gray-800/50 border border-gray-700 text-gray-300 cursor-not-allowed" placeholder="Location will be set automatically">
+      </div>
+      <div>
+        <label for="reschedule-notes" class="block text-sm font-medium text-gray-300 mb-2">Notes</label>
+        <textarea id="reschedule-notes" name="notes" rows="3" placeholder="Add instructions or important reminders..." class="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+      </div>
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button type="button" class="px-5 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700" onclick="window.closeModal('reschedule-modal')">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+
+// Interview data store
+const interviewData = {{ interviews|tojson|safe }};
+const applicationsData = {{ applications|tojson|safe }};
+
+// Modal functions
+// Make all functions globally accessible
+window.openModal = function(id) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  
+  // Batch DOM operations to minimize reflows
+  requestAnimationFrame(() => {
+    modal.classList.remove('hidden');
+    // Allow CSS transition to run by adding .show after paint
+    requestAnimationFrame(() => {
+      modal.classList.add('show');
+    });
+    document.body.style.overflow = 'hidden';
+  });
+}
+
+window.closeModal = function(id) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  
+  // Batch DOM operations to minimize reflows
+  requestAnimationFrame(() => {
+    // Start fade-out
+    modal.classList.remove('show');
+    // After transition, hide
+    setTimeout(() => {
+      modal.classList.add('hidden');
+      document.body.style.overflow = '';
+    }, 200);
+  });
+}
+
+// Rating stars - optimized to minimize reflows
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.rating-star').forEach(star => {
+    star.addEventListener('click', function() {
+      const criteria = this.dataset.criteria;
+      const rating = parseInt(this.dataset.rating);
+      const container = document.getElementById(`rating-${criteria}`);
+      const input = document.getElementById(`${criteria}-rating-value`);
+      
+      if (!container || !input) return;
+      
+      // Batch all DOM reads first (no writes yet)
+      const stars = Array.from(container.querySelectorAll('.rating-star'));
+      
+      // Use setTimeout(0) to defer writes to next event loop, avoiding forced reflow
+      setTimeout(() => {
+        // Batch all class changes together
+        stars.forEach((s, index) => {
+        if (index < rating) {
+          s.classList.add('active');
+          s.classList.remove('text-gray-600');
+        } else {
+          s.classList.remove('active');
+          s.classList.add('text-gray-600');
+        }
+      });
+      
+      input.value = rating;
+      }, 0);
+    }, { passive: true });
+    
+    star.addEventListener('mouseenter', function() {
+      const criteria = this.dataset.criteria;
+      const rating = parseInt(this.dataset.rating);
+      const container = document.getElementById(`rating-${criteria}`);
+      
+      if (!container) return;
+      
+      // Batch DOM reads first
+      const stars = Array.from(container.querySelectorAll('.rating-star'));
+      
+      // Batch DOM writes using setTimeout to avoid forced reflow
+      setTimeout(() => {
+        stars.forEach((s, index) => {
+        if (index < rating) {
+          s.classList.add('active');
+        }
+      });
+      }, 0);
+    }, { passive: true });
+    
+    star.addEventListener('mouseleave', function() {
+      const criteria = this.dataset.criteria;
+      const container = document.getElementById(`rating-${criteria}`);
+      const input = document.getElementById(`${criteria}-rating-value`);
+      
+      if (!container || !input) return;
+      
+      // Batch DOM reads first
+      const currentRating = parseInt(input.value) || 0;
+      const stars = Array.from(container.querySelectorAll('.rating-star'));
+      
+      // Batch DOM writes using setTimeout to avoid forced reflow
+      setTimeout(() => {
+        stars.forEach((s, index) => {
+        if (index >= currentRating) {
+          s.classList.remove('active');
+        }
+      });
+      }, 0);
+    }, { passive: true });
+  });
+  
+  // Close modals on ESC
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay').forEach(modal => {
+        if (!modal.classList.contains('hidden')) {
+          window.closeModal(modal.id);
+        }
+      });
+    }
+  });
+  
+  // Close modals on outside click - optimized with event delegation
+  document.addEventListener('click', function(e) {
+    const modal = e.target.closest('.modal-overlay');
+    if (modal && e.target === modal) {
+      window.closeModal(modal.id);
+      }
+  }, { passive: true });
+});
+
+// Start interview
+window.startInterview = function(interviewId) {
+  if (!confirm('Start this interview? The status will be updated to "In Progress".')) return;
+  
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '{{ url_for("hr_interviews") }}';
+  
+  const csrfInput = document.createElement('input');
+  csrfInput.type = 'hidden';
+  csrfInput.name = 'csrf_token';
+  csrfInput.value = '{{ csrf_token() }}';
+  
+  const actionInput = document.createElement('input');
+  actionInput.type = 'hidden';
+  actionInput.name = 'action';
+  actionInput.value = 'mark_attendance';
+  
+  const interviewIdInput = document.createElement('input');
+  interviewIdInput.type = 'hidden';
+  interviewIdInput.name = 'interview_id';
+  interviewIdInput.value = interviewId;
+  
+  const statusInput = document.createElement('input');
+  statusInput.type = 'hidden';
+  statusInput.name = 'attendance_status';
+  statusInput.value = 'completed';
+  
+  form.appendChild(csrfInput);
+  form.appendChild(actionInput);
+  form.appendChild(interviewIdInput);
+  form.appendChild(statusInput);
+  document.body.appendChild(form);
+  form.submit();
+}
+
+// Cancel interview
+window.cancelInterview = async function(interviewId) {
+  if (!confirm('Cancel this interview?')) return;
+  try {
+    const fd = new FormData();
+    fd.append('csrf_token', '{{ csrf_token() }}');
+    fd.append('status', 'cancelled');
+    const res = await fetch(`/interviews/${interviewId}/status`, {
+      method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: fd
+    });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to cancel interview');
+    const row = document.querySelector(`[data-interview-row="${interviewId}"]`);
+    if (row) {
+      const badge = row.querySelector('.status-badge');
+      if (badge) {
+        badge.className = 'status-badge bg-red-600/20 text-red-400 border-red-600/30';
+        badge.textContent = 'Cancelled';
+      }
+      row.querySelectorAll('button').forEach(btn => {
+        if (btn.title === 'Start Interview' || btn.title === 'Reschedule' || btn.title === 'Cancel' || btn.title === 'Mark as Completed') {
+          btn.disabled = true; btn.classList.add('opacity-50','cursor-not-allowed');
+        }
+      });
+    }
+  } catch(e) { alert(e.message); }
+}
+
+
+// Reschedule interview
+window.rescheduleInterview = function(interviewId) {
+  const interview = interviewData.find(i => String(i.interview_id) === String(interviewId));
+  if (!interview) {
+    alert('Interview data not found. Please refresh the page and try again.');
+    return;
+  }
+  const dateField = document.getElementById('reschedule-date');
+  const timeField = document.getElementById('reschedule-time');
+  const locationField = document.getElementById('reschedule-location');
+  const notesField = document.getElementById('reschedule-notes');
+  const modeField = document.getElementById('reschedule-mode');
+  const idField = document.getElementById('reschedule-interview-id');
+  
+  if (!dateField || !timeField || !idField) {
+    alert('Reschedule form is not available.');
+    return;
+  }
+  
+  const rawDateTime = (interview.scheduled_date_raw || interview.scheduled_date || '').trim();
+  const rawTime = (interview.scheduled_time_raw || '').trim();
+  let dateValue = '';
+  let timeValue = '';
+  
+  if (rawDateTime) {
+    const parts = rawDateTime.split(' ');
+    dateValue = parts[0] || '';
+    if (!rawTime && parts.length > 1) {
+      timeValue = parts[1] ? parts[1].slice(0,5) : '';
+    }
+  }
+  if (rawTime) {
+    timeValue = rawTime.slice(0,5);
+  }
+  
+  idField.value = interviewId;
+  dateField.value = dateValue;
+  timeField.value = timeValue;
+  if (locationField) {
+    // Set location field value - use existing location or branch_name from interview
+    const locationValue = interview.location || interview.branch_name || '';
+    locationField.value = locationValue;
+  }
+  notesField && (notesField.value = interview.notes || '');
+  
+  const normalizedMode = (interview.interview_mode || 'in-person').toLowerCase();
+  if (modeField) {
+    if (normalizedMode.includes('remote') || normalizedMode.includes('online') || normalizedMode.includes('video')) {
+      modeField.value = 'remote';
+    } else {
+      modeField.value = 'in-person';
+    }
+  }
+  
+  window.openModal('reschedule-modal');
+};
+
+// Mark interview as completed (AJAX)
+window.markCompleted = async function(interviewId) {
+  try {
+    const fd = new FormData();
+    fd.append('csrf_token', '{{ csrf_token() }}');
+    fd.append('status', 'completed');
+    const res = await fetch(`/interviews/${interviewId}/status`, {
+      method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: fd
+    });
+    const data = await res.json().catch(()=>({}));
+    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to mark completed');
+    const row = document.querySelector(`[data-interview-row="${interviewId}"]`);
+    if (row) {
+      const badge = row.querySelector('.status-badge');
+      if (badge) {
+        badge.className = 'status-badge bg-green-600/20 text-green-400 border-green-600/30';
+        badge.textContent = 'Completed';
+      }
+      row.querySelectorAll('button').forEach(btn => {
+        if (btn.title === 'Start Interview' || btn.title === 'Reschedule' || btn.title === 'Cancel' || btn.title === 'Mark as Completed') {
+          btn.disabled = true; btn.classList.add('opacity-50','cursor-not-allowed');
+        }
+      });
+    }
+  } catch(e) { alert(e.message); }
+}
+
+// Delete interview
+window.deleteInterview = async function(interviewId) {
+  if (!confirm('Are you sure you want to permanently delete this interview? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const fd = new FormData();
+    fd.append('csrf_token', '{{ csrf_token() }}');
+    fd.append('action', 'delete');
+    fd.append('interview_id', interviewId);
+    const res = await fetch('{{ url_for("hr_interviews") }}', {
+      method: 'POST', 
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }, 
+      body: fd
+  });
+  
+    const data = await res.json().catch(() => {
+      // If not JSON, assume success and reload
+      return { success: true };
+    });
+    
+    if (data.success || res.ok) {
+      // Remove the row from the table with animation
+      const row = document.querySelector(`[data-interview-row="${interviewId}"]`);
+      if (row) {
+        row.style.transition = 'opacity 0.3s ease-out';
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+        }, 300);
+      }
+      // Reload page after a short delay to refresh the list
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+  } else {
+      throw new Error(data.error || data.message || 'Failed to delete interview');
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+    console.error('Delete interview error:', e);
+  }
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', function() {
+  markTodayInterviews();
+});
+
+// Highlight today's interviews in the table
+window.markTodayInterviews = function() {
+  const today = new Date().toISOString().split('T')[0];
+  interviewData.forEach(interview => {
+    const rawDate = (interview.scheduled_date_raw || '').split(' ')[0];
+    if (!rawDate || rawDate !== today) return;
+    const row = document.querySelector(`[data-interview-row="${interview.interview_id}"]`);
+    if (row) {
+      row.classList.add('today-row-highlight');
+      const dateCell = row.querySelector('[data-date-cell]');
+      if (dateCell && !dateCell.querySelector('.today-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'today-badge';
+        badge.innerHTML = '<i class="fas fa-sun"></i>Today';
+        dateCell.appendChild(badge);
+      }
+    }
+  });
+};
+
+// Export interviews
+window.exportInterviews = function() {
+  const headers = ['Candidate', 'Position', 'Date', 'Time', 'Type', 'Status'];
+  const rows = interviewData.map(i => [
+    i.applicant_name || '',
+    i.job_title || '',
+    i.scheduled_date_raw || '',
+    i.scheduled_time_raw || '',
+    (i.interview_mode || 'in_person').replace('_', ' '),
+    i.interview_status || ''
+  ]);
+  
+  const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `interviews_export_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+// Open Schedule Interviewed modal (HR)
+function openScheduleModal(prefillApplicationId) {
+  const modal = document.getElementById('schedule-modal');
+  const form = document.getElementById('schedule-form');
+  const applicantSelect = document.getElementById('schedule-applicant-id');
+  const appHidden = document.getElementById('schedule-application-id');
+  if (!modal || !form) return;
+  
+  // Store prefill info before reset
+  let prefillApplicantId = null;
+  let targetApplication = null;
+  if (prefillApplicationId) {
+    targetApplication = (applicationsData || []).find(a => String(a.application_id) === String(prefillApplicationId));
+    if (targetApplication) {
+      prefillApplicantId = String(targetApplication.applicant_id);
+    }
+  }
+  
+  form.reset();
+  if (appHidden) appHidden.value = '';
+  // Clear location field on form reset (readonly fields don't reset automatically)
+  const locationField = document.getElementById('schedule-location');
+  if (locationField) locationField.value = '';
+  
+  // Rebind applicant change to avoid duplicate listeners
+  if (applicantSelect) {
+    const newSelect = applicantSelect.cloneNode(true);
+    applicantSelect.parentNode.replaceChild(newSelect, applicantSelect);
+    
+    // Set up change handler
+    newSelect.addEventListener('change', function() {
+      const selectedApplicantId = this.value;
+      if (!selectedApplicantId || !appHidden) return;
+      
+      // Get the selected option to access branch_name data attribute
+      const selectedOption = this.options[this.selectedIndex];
+      const branchName = selectedOption ? selectedOption.getAttribute('data-branch-name') : '';
+      
+      // Auto-populate location field with applicant's branch
+      const locationField = document.getElementById('schedule-location');
+      if (locationField && branchName) {
+        // Automatically set the location to the branch name
+        locationField.value = branchName;
+      } else {
+        // Clear location if no branch name
+        locationField.value = '';
+      }
+      
+      // Pick the first application for this applicant, prefer reviewed
+      // Filter out rejected applications - cannot schedule interview for rejected
+      // Note: withdrawn is already normalized to rejected in backend
+      const statusPriority = { reviewed: 1, interviewed: 2, accepted: 3, hired: 3, pending: 4 };
+      const apps = (applicationsData || []).filter(a => {
+        const status = (a.status || '').toLowerCase();
+        return String(a.applicant_id) === String(selectedApplicantId) && 
+               status !== 'rejected';
+      });
+      if (apps.length > 0) {
+        apps.sort((a, b) => (statusPriority[(a.status || '').toLowerCase()] || 99) - (statusPriority[(b.status || '').toLowerCase()] || 99));
+        appHidden.value = apps[0].application_id;
+      } else {
+        appHidden.value = '';
+      }
+    });
+    
+    // If prefillApplicationId is provided, pre-select the applicant AFTER cloning and setting up handler
+    if (prefillApplicationId && prefillApplicantId && targetApplication) {
+      // Set the application_id hidden field first
+      if (appHidden) appHidden.value = String(targetApplication.application_id);
+      // Select the applicant in the dropdown - this will automatically show the applicant name
+      newSelect.value = prefillApplicantId;
+      // Trigger change event after a short delay to ensure everything is set up correctly
+      setTimeout(() => {
+        const changeEvent = new Event('change', { bubbles: true });
+        newSelect.dispatchEvent(changeEvent);
+      }, 100);
+    }
+  }
+  // Ensure basic validation on submit
+  form.addEventListener('submit', function(e) {
+    const applicantId = document.getElementById('schedule-applicant-id')?.value;
+    const applicationId = document.getElementById('schedule-application-id')?.value;
+    if (!applicantId) {
+      e.preventDefault();
+      alert('Please select an applicant.');
+      return false;
+    }
+    if (!applicationId) {
+      // Try to resolve based on selected applicant once more - filter out rejected
+      // Note: withdrawn is already normalized to rejected in backend
+      const apps = (applicationsData || []).filter(a => {
+        const status = (a.status || '').toLowerCase();
+        return String(a.applicant_id) === String(applicantId) && 
+               status !== 'rejected';
+      });
+      if (apps.length > 0) {
+        // Sort by priority: reviewed > pending > interviewed
+        const statusPriority = { reviewed: 1, pending: 2, interviewed: 3 };
+        apps.sort((a, b) => {
+          const aStatus = (a.status || '').toLowerCase();
+          const bStatus = (b.status || '').toLowerCase();
+          return (statusPriority[aStatus] || 99) - (statusPriority[bStatus] || 99);
+        });
+        document.getElementById('schedule-application-id').value = apps[0].application_id;
+      } else {
+        e.preventDefault();
+        alert('No eligible application found for the selected applicant. Make sure the applicant has an application that is not rejected (status must be: pending, reviewed, or interviewed).');
+        return false;
+      }
+    }
+    return true;
+  }, { once: true });
+  // Open modal
+  if (typeof window.openModal === 'function') {
+    window.openModal('schedule-modal');
+  } else {
+    modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    document.body.style.overflow = 'hidden';
+  }
+}
+window.openScheduleModal = openScheduleModal;
+
+// Auto-open when action=schedule or application_id is present
+document.addEventListener('DOMContentLoaded', function() {
+  const params = new URLSearchParams(window.location.search);
+  const action = params.get('action');
+  const applicationId = params.get('application_id');
+  const applicantId = params.get('applicant_id');
+  
+  if (action === 'schedule' || applicationId || applicantId) {
+    setTimeout(() => {
+      if (applicationId) {
+        // If application_id is provided, use it directly
+        window.openScheduleModal(parseInt(applicationId));
+      } else if (applicantId) {
+        // If only applicant_id is provided, find the first non-rejected application for that applicant
+        const app = (applicationsData || []).find(a => {
+          const status = (a.status || '').toLowerCase();
+          return String(a.applicant_id) === String(applicantId) && status !== 'rejected';
+        });
+        if (app) {
+          window.openScheduleModal(parseInt(app.application_id));
+        } else {
+          window.openScheduleModal();
+        }
+      } else {
+        window.openScheduleModal();
+      }
+    }, 200);
+  }
+});
+
+</script>
+{% endblock %}

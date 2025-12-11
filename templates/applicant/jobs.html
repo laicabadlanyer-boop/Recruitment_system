@@ -1,0 +1,418 @@
+{% extends "applicant/_base.html" %}
+
+{% block title %}Browse Jobs • Applicant{% endblock %}
+
+{% block extra_css %}
+<style>
+    .job-card {
+        border-radius: 1.75rem;
+        padding: 1.5rem;
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        background: rgba(15, 23, 42, 0.65);
+        backdrop-filter: blur(16px);
+        transition: transform 0.25s ease, border-color 0.25s ease;
+    }
+    .job-card:hover {
+        transform: translateY(-6px);
+        border-color: rgba(248, 113, 113, 0.35);
+    }
+    .filter-control {
+        background: rgba(15, 23, 42, 0.65);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 1rem;
+        padding: 0.85rem 1rem;
+        color: #e2e8f0;
+        font-size: 0.9rem;
+        width: 100%;
+    }
+    .filter-control:focus {
+        outline: none;
+        border-color: rgba(248, 113, 113, 0.6);
+        box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.15);
+    }
+    .job-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        align-items: center;
+    }
+    .job-card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+    }
+    .filters-grid {
+        display: flex;
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+    .filters-grid > div:first-child {
+        flex: 1;
+    }
+    .filters-grid > div:not(:first-child) {
+        flex: 0 0 auto;
+        min-width: 200px;
+    }
+    
+    /* Mobile Styles (max-width: 640px) */
+    @media (max-width: 640px) {
+        /* Header padding */
+        header.glass-panel {
+            padding: 1rem !important;
+            border-radius: 1.5rem !important;
+        }
+        
+        /* Header title */
+        header h1 {
+            font-size: 1.5rem !important;
+        }
+        
+        header p {
+            font-size: 0.75rem !important;
+        }
+        
+        /* Action buttons stack vertically */
+        header .flex.flex-wrap {
+            flex-direction: column;
+            width: 100%;
+        }
+        
+        header .flex.flex-wrap a {
+            width: 100%;
+            text-align: center;
+            padding: 0.75rem 1rem !important;
+            font-size: 0.875rem !important;
+        }
+        
+        /* Filter grid - stack vertically */
+        .filters-grid {
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .filters-grid > div {
+            width: 100% !important;
+            min-width: unset !important;
+        }
+        
+        .filters-grid > div:not(:first-child) {
+            flex: 1;
+        }
+        
+        /* Saved jobs checkbox - full width */
+        .filters-grid > div.flex.items-center {
+            width: 100%;
+            padding: 0.5rem 0;
+        }
+        
+        /* Filter controls */
+        .filter-control {
+            padding: 0.75rem 0.875rem;
+            font-size: 0.875rem;
+        }
+        
+        /* Search icon position */
+        #job-search + i {
+            left: 0.75rem !important;
+        }
+        
+        input.pl-11 {
+            padding-left: 2.5rem !important;
+        }
+        
+        /* Job cards */
+        .job-card {
+            border-radius: 1.25rem;
+            padding: 1rem;
+        }
+        
+        .job-card h2 {
+            font-size: 1.125rem !important;
+            line-height: 1.4;
+        }
+        
+        .job-card .text-sm {
+            font-size: 0.8125rem !important;
+        }
+        
+        .job-card .flex.items-start {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        /* Job meta info */
+        .job-meta {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+        }
+        
+        /* Job card actions */
+        .job-card-actions {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.5rem;
+            margin-top: 1rem !important;
+        }
+        
+        .job-card-actions > * {
+            width: 100%;
+            text-align: center;
+        }
+        
+        .job-card-actions form button {
+            width: 100%;
+            padding: 0.75rem 1rem !important;
+            font-size: 0.875rem !important;
+        }
+        
+        .job-card-actions a {
+            width: 100%;
+            justify-content: center;
+            display: inline-flex;
+            padding: 0.75rem 1rem !important;
+            font-size: 0.875rem !important;
+        }
+        
+        /* Empty state */
+        .glass-panel.rounded-3xl.p-12 {
+            padding: 2rem 1rem !important;
+        }
+        
+        .glass-panel.rounded-3xl.p-12 .w-16.h-16 {
+            width: 3rem;
+            height: 3rem;
+        }
+    }
+    
+    /* Tablet Styles (641px - 1023px) */
+    @media (min-width: 641px) and (max-width: 1023px) {
+        /* Header padding */
+        header.glass-panel {
+            padding: 1.5rem !important;
+        }
+        
+        /* Filter grid - allow wrapping */
+        .filters-grid {
+            flex-wrap: wrap;
+        }
+        
+        .filters-grid > div:first-child {
+            flex: 1 1 100%;
+            min-width: 100%;
+        }
+        
+        .filters-grid > div:not(:first-child) {
+            flex: 1 1 calc(50% - 0.375rem);
+            min-width: calc(50% - 0.375rem);
+        }
+        
+        /* Job cards grid - single column on tablet */
+        .grid.grid-cols-1.lg\:grid-cols-2 {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    /* Desktop Styles (min-width: 1024px) */
+    @media (min-width: 1024px) {
+        .filters-grid > div:not(:first-child) {
+            min-width: 200px;
+        }
+    }
+    
+    /* Large Desktop (min-width: 1280px) */
+    @media (min-width: 1280px) {
+        .filters-grid > div:not(:first-child) {
+            min-width: 220px;
+        }
+    }
+    
+    /* Very Small Devices (max-width: 375px) */
+    @media (max-width: 375px) {
+        header h1 {
+            font-size: 1.25rem !important;
+        }
+        
+        .job-card {
+            padding: 0.875rem;
+        }
+        
+        .job-card h2 {
+            font-size: 1rem !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+    <header class="glass-panel rounded-3xl p-3 sm:p-4 md:p-5 lg:p-6 flex flex-col gap-3 sm:gap-4">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
+            <div>
+                <p class="text-xs uppercase tracking-[0.4em] text-slate-400">
+                    {{ 'Saved jobs' if saved_mode else 'Find your next role' }}
+                </p>
+                <h1 class="text-2xl sm:text-3xl font-semibold text-white">
+                    {{ 'Saved Opportunities' if saved_mode else 'Open Job Positions' }}
+                </h1>
+                <p class="text-slate-400 text-xs sm:text-sm mt-1 sm:mt-2">
+                    {{ 'All the roles you bookmarked live here.' if saved_mode else 'Search, filter, and apply with one click.' }}
+                </p>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+                <a href="{{ url_for('saved_jobs') }}" class="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-white/20 text-xs sm:text-sm font-semibold text-white/80 hover:text-white text-center transition">
+                    <i class="fas fa-bookmark mr-2"></i>Saved Jobs
+                </a>
+                <a href="{{ url_for('applicant_applications') }}" class="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-xs sm:text-sm font-semibold text-white shadow-lg shadow-rose-500/30 text-center transition">
+                    <i class="fas fa-list mr-2"></i>My Applications
+                </a>
+            </div>
+        </div>
+        <form id="job-filters-form" method="get" action="{{ url_for('jobs') }}" class="filters-grid">
+            <div class="relative flex-1">
+                <label for="job-search" class="sr-only">Search by job title</label>
+                <i class="fas fa-search absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                <input type="text" id="job-search" name="keyword" placeholder="Search by job title or branch name" value="{{ current_filters.get('keyword', '') }}" class="filter-control pl-9 sm:pl-11 text-sm sm:text-base">
+            </div>
+            <div class="flex-shrink-0 w-full sm:w-auto" style="min-width: 200px;">
+                <label for="branch-filter" class="sr-only">Filter by branch</label>
+                <select id="branch-filter" name="branch_id" class="filter-control text-sm sm:text-base">
+                    <option value="">All Branches</option>
+                    {% for branch in branches %}
+                    <option value="{{ branch.branch_id }}" {% if current_filters.branch_id == branch.branch_id %}selected{% endif %}>
+                        {{ branch.branch_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if is_logged_in() and session.get('user_role') == 'applicant' %}
+            <div class="flex items-center gap-2 w-full sm:w-auto" style="min-width: 200px;">
+                <label for="saved-only-filter" class="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-white/80 hover:text-white w-full sm:w-auto">
+                    <input type="checkbox" id="saved-only-filter" name="saved_only" value="1" {% if current_filters.get('saved_only') %}checked{% endif %} class="w-4 h-4 rounded border-white/20 bg-slate-800 text-rose-500 focus:ring-rose-500 focus:ring-2 flex-shrink-0">
+                    <span class="whitespace-nowrap"><i class="fas fa-bookmark mr-1"></i>Saved Jobs Only</span>
+                </label>
+            </div>
+            {% endif %}
+        </form>
+    </header>
+    </header>
+
+    {% if jobs %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+        {% for job in jobs %}
+        <article class="job-card">
+            <div class="flex items-start justify-between gap-3 sm:gap-4">
+                <div class="flex-1 min-w-0">
+                    <h2 class="text-xl sm:text-2xl font-semibold text-white mt-1 break-words">{{ job.title or job.job_title or 'Untitled Job' }}</h2>
+                    <p class="text-slate-400 text-xs sm:text-sm mt-1 truncate">{{ job.branch_name or 'Any location' }}</p>
+                </div>
+            </div>
+            <p class="text-slate-300 text-xs sm:text-sm leading-relaxed mt-3 sm:mt-4 line-clamp-3">{{ job.summary or job.job_summary or 'Description coming soon.' }}</p>
+            <div class="job-meta mt-3 sm:mt-4 text-xs text-slate-400">
+                <span><i class="fas fa-users mr-2 text-slate-500"></i>{{ job.application_count or 0 }} applicants</span>
+                {% if job.posted_at %}
+                <span><i class="fas fa-clock mr-2 text-slate-500"></i>{{ job.posted_at }}</span>
+                {% endif %}
+            </div>
+            <div class="job-card-actions mt-4 sm:mt-6">
+                <a href="{{ url_for('apply_to_job', job_id=job.job_id) }}" class="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-white/15 hover:bg-white/25 text-white font-semibold text-xs sm:text-sm transition text-center">
+                    {% if job.already_applied %}
+                    <i class="fas fa-pen-to-square mr-2"></i>Update Application
+                    {% else %}
+                    <i class="fas fa-paper-plane mr-2"></i>Apply Now
+                    {% endif %}
+                </a>
+                {% if job.is_saved %}
+                <form method="post" action="{{ url_for('unsave_job', job_id=job.job_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-rose-400/40 text-rose-200 text-xs sm:text-sm font-semibold hover:bg-rose-500/10 w-full">
+                        <i class="fas fa-bookmark mr-2"></i>Saved
+                    </button>
+                </form>
+                {% else %}
+                <form method="post" action="{{ url_for('save_job', job_id=job.job_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-white/20 text-white/80 text-xs sm:text-sm font-semibold hover:text-white w-full">
+                        <i class="far fa-bookmark mr-2"></i>Save Job
+                    </button>
+                </form>
+                {% endif %}
+                {% if job.application_status %}
+                <span class="text-xs font-semibold px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-slate-500/10 text-slate-200 border border-slate-500/30 text-center">
+                    {{ job.application_status.replace('_',' ')|title }}
+                </span>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="glass-panel rounded-3xl p-6 sm:p-8 md:p-12 text-center border border-dashed border-white/20">
+        <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl mx-auto bg-white/5 flex items-center justify-center text-white/70 mb-3 sm:mb-4">
+            <i class="fas fa-magnifying-glass text-xl sm:text-2xl"></i>
+        </div>
+        <p class="text-base sm:text-lg font-semibold text-white mb-1">No roles found</p>
+        <p class="text-slate-400 text-xs sm:text-sm mb-4 sm:mb-6">Try adjusting your filters or check back later.</p>
+        {% if saved_mode %}
+        <a href="{{ url_for('jobs') }}" class="px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-white text-xs sm:text-sm font-semibold inline-block">Browse all jobs</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('job-filters-form');
+    if (!form) return;
+
+    const keywordInput = document.getElementById('job-search');
+    const selects = form.querySelectorAll('select');
+    let typingTimer;
+
+    const savedOnlyCheckbox = document.getElementById('saved-only-filter');
+    
+    const getState = () => ({
+        keyword: (keywordInput?.value || '').trim(),
+        branch: form.elements['branch_id']?.value || '',
+        savedOnly: savedOnlyCheckbox?.checked || false,
+    });
+
+    let lastSubmitted = getState();
+
+    function submitIfChanged() {
+        const current = getState();
+        if (
+            current.keyword === lastSubmitted.keyword &&
+            current.branch === lastSubmitted.branch &&
+            current.savedOnly === lastSubmitted.savedOnly
+        ) {
+            return;
+        }
+        lastSubmitted = current;
+        if (form.requestSubmit) {
+            form.requestSubmit();
+        } else {
+            form.submit();
+        }
+    }
+
+    function debounceSubmit() {
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(submitIfChanged, 400);
+    }
+
+    keywordInput?.addEventListener('input', debounceSubmit);
+    selects.forEach(select => {
+        select.addEventListener('change', submitIfChanged);
+    });
+    
+    // Auto-submit when saved jobs checkbox changes
+    savedOnlyCheckbox?.addEventListener('change', submitIfChanged);
+});
+</script>
+{% endblock %}

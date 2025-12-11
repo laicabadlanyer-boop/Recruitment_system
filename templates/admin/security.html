@@ -1,0 +1,129 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}Activity Logs • J&T Express{% endblock %}
+
+{% block extra_css %}
+{% endblock %}
+
+{% block content %}
+<header class="content-section card rounded-xl bg-gradient-to-r from-gray-900 via-gray-900 to-black p-3 sm:p-4 md:p-5">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2">Activity Logs</h1>
+            <p class="text-gray-400 text-xs sm:text-sm md:text-base">View and monitor all HR user activities and system events across all branches.</p>
+        </div>
+    </div>
+</header>
+
+<!-- Security Events Alert -->
+{% if security_events and security_events|length > 0 %}
+<section class="content-section card rounded-xl bg-red-900/20 border border-red-600/30 p-3 sm:p-4 mb-4">
+    <h2 class="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2 text-red-400">
+        <i class="fas fa-exclamation-triangle"></i>
+        Security Events (Last 24 Hours)
+    </h2>
+    <div class="table-container">
+        <table class="w-full text-sm min-w-[600px]">
+            <thead>
+                <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-800">
+                    <th class="py-3 text-left px-2">Email</th>
+                    <th class="py-3 text-left px-2">Login Attempts</th>
+                    <th class="py-3 text-left px-2">Last Attempt</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                {% for event in security_events %}
+                <tr class="hover:bg-gray-800/50 transition-colors">
+                    <td class="py-4 px-2 text-gray-300">{{ event.email }}</td>
+                    <td class="py-4 px-2">
+                        <span class="px-2 py-1 rounded-full text-xs bg-red-600/20 text-red-400 font-semibold">{{ event.attempt_count }}</span>
+                    </td>
+                    <td class="py-4 px-2 text-gray-300 text-xs">{{ event.last_attempt or 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<!-- HR Activity Logs -->
+{% if activity_logs and activity_logs|length > 0 %}
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4 mb-4">
+    <h2 class="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
+        <i class="fas fa-history text-blue-400"></i>
+        HR Activity Logs
+    </h2>
+    <div class="table-container">
+        <table class="w-full text-sm min-w-[700px]">
+            <thead>
+                <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-800">
+                    <th class="py-3 text-left px-2">HR User</th>
+                    <th class="py-3 text-left px-2">Branch</th>
+                    <th class="py-3 text-left px-2">Action Type</th>
+                    <th class="py-3 text-left px-2">Details</th>
+                    <th class="py-3 text-left px-2">Timestamp</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                {% for log in activity_logs %}
+                <tr class="hover:bg-gray-800/50 transition-colors">
+                    <td class="py-4 px-2">
+                        <div class="flex flex-col">
+                            <span class="text-gray-300 text-xs font-semibold">{{ log.admin_name or 'System' }}</span>
+                            <span class="text-gray-500 text-xs">{{ log.admin_email or '' }}</span>
+                        </div>
+                    </td>
+                    <td class="py-4 px-2">
+                        {% if log.branch_name %}
+                            <span class="px-2 py-1 rounded-full text-xs bg-blue-600/20 text-blue-400">{{ log.branch_name }}</span>
+                        {% else %}
+                            <span class="text-gray-500 text-xs">All Branches</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-4 px-2">
+                        {% set action_lower = (log.action or '')|lower %}
+                        {% if 'add' in action_lower or 'create' in action_lower or 'post' in action_lower %}
+                            <span class="px-2 py-1 rounded-full text-xs bg-green-600/20 text-green-400 font-semibold">+ {{ log.action }}</span>
+                        {% elif 'update' in action_lower or 'edit' in action_lower or 'modify' in action_lower %}
+                            <span class="px-2 py-1 rounded-full text-xs bg-blue-600/20 text-blue-400 font-semibold">✎ {{ log.action }}</span>
+                        {% elif 'delete' in action_lower %}
+                            <span class="px-2 py-1 rounded-full text-xs bg-red-600/20 text-red-400 font-semibold">✕ {{ log.action }}</span>
+                        {% elif 'schedule' in action_lower or 'reschedule' in action_lower %}
+                            <span class="px-2 py-1 rounded-full text-xs bg-purple-600/20 text-purple-400 font-semibold">📅 {{ log.action }}</span>
+                        {% elif 'status' in action_lower %}
+                            <span class="px-2 py-1 rounded-full text-xs bg-yellow-600/20 text-yellow-400 font-semibold">⚙ {{ log.action }}</span>
+                        {% else %}
+                            <span class="px-2 py-1 rounded-full text-xs bg-gray-600/20 text-gray-400 font-semibold">{{ log.action or 'Action' }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-4 px-2">
+                        <span class="text-gray-400 text-xs">
+                            {% if log.details %}
+                                {{ log.details }}
+                            {% else %}
+                                <span class="text-gray-500">-</span>
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td class="py-4 px-2 text-gray-300 text-xs whitespace-nowrap">{{ log.created_at or 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% else %}
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4 mb-4">
+    <h2 class="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
+        <i class="fas fa-history text-blue-400"></i>
+        HR Activity Logs
+    </h2>
+    <div class="text-center py-10 text-gray-400">
+        <i class="fas fa-history text-4xl mb-3 opacity-50"></i>
+        <p>No HR activity logs found</p>
+        <p class="text-xs text-gray-500 mt-2">HR activities will appear here once HR users start performing actions in the HR portal</p>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
