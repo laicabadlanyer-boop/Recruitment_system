@@ -1,0 +1,820 @@
+{% extends "hr/_base.html" %}
+
+{% block title %}Job Postings • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    overflow-y: auto;
+    padding: 1rem;
+  }
+  .modal-content {
+    width: 100%;
+    max-width: 56rem;
+    max-height: 95vh;
+    background: rgba(17,24,39,0.98);
+    border: 1px solid rgba(220,38,38,0.3);
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    overflow-y: auto;
+    margin: auto;
+  }
+  .modal-large {
+    max-width: 80rem;
+  }
+  .table-row-hover:hover {
+    background: rgba(220,38,38,0.05);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set jobs = jobs if jobs is defined else [] %}
+{% set job_meta = job_meta if job_meta is defined else {} %}
+{% set locations = job_meta.get('locations', []) %}
+
+<!-- 1. HEADER: Job Postings + Add New Job Button -->
+<header class="card rounded-2xl bg-gradient-to-r from-black via-gray-900 to-gray-900 p-6 mb-6 shadow-lg border border-red-600/20">
+  <!-- Access Scope Indicator -->
+  <div class="mb-4 pb-4 border-b border-gray-800">
+    <div class="flex items-center gap-2 text-xs text-gray-400 mb-2">
+      <i class="fas fa-info-circle text-red-400"></i>
+      <span class="uppercase tracking-wide">Branch Access</span>
+    </div>
+    {% if current_branch %}
+    <p class="text-sm text-gray-300">
+      <i class="fas fa-code-branch text-red-400 mr-2"></i>
+      <span class="font-semibold text-white">Assigned Branch: {{ current_branch.branch_name or 'N/A' }}</span>
+      <span class="text-gray-500 ml-2">- You can only post jobs to your assigned branch.</span>
+    </p>
+    {% else %}
+    <p class="text-sm text-gray-300">
+      <i class="fas fa-code-branch text-red-400 mr-2"></i>
+      <span class="font-semibold text-white">All Branches</span>
+      <span class="text-gray-500 ml-2">- You can post jobs to any branch. Select the branch when creating a new job posting.</span>
+    </p>
+    {% endif %}
+  </div>
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2">Job Postings</h1>
+      <p class="text-gray-400 text-sm">Manage all job postings across all branches</p>
+    </div>
+    <button type="button" id="add-job-btn" onclick="window.openAddModal()" class="btn-primary px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-lg flex items-center gap-2">
+      <i class="fas fa-plus"></i>
+      <span>Add New Job</span>
+    </button>
+  </div>
+</header>
+
+<!-- 2. FILTERS: Search, Status, Branch -->
+<section class="card rounded-2xl bg-gray-900/80 p-6 mb-6 border border-gray-800">
+  <div class="flex flex-col md:flex-row gap-2 sm:gap-3 mb-3 sm:mb-4">
+    <div class="relative flex-1">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none z-10"></i>
+      <label for="keyword-filter" class="sr-only">Search job titles</label>
+      <input 
+        type="text" 
+        id="keyword-filter" 
+        name="keyword" 
+        autocomplete="off" 
+        placeholder="Search job titles..." 
+        aria-label="Search job titles by keyword" 
+        value="{{ current_filters.get('keyword', '') if current_filters else '' }}" 
+        class="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none placeholder-gray-500"
+      >
+    </div>
+    {% if branches and not (current_user and current_user.role == 'hr' and current_user.branch_id) %}
+    <div>
+      <label for="branch-filter" class="sr-only">Filter by branch</label>
+      <select 
+        id="branch-filter" 
+        name="branch_id" 
+        autocomplete="organization" 
+        class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-4 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+      >
+      <option value="all">All Branches</option>
+      {% for branch in branches %}
+        {% set branch_id_val = branch.branch_id if branch.branch_id is number else branch.branch_id|int %}
+        {% set filter_branch_id = current_filters.get('branch_id') if current_filters else None %}
+        {% set filter_branch_id_val = filter_branch_id|int if filter_branch_id else None %}
+        <option value="{{ branch_id_val }}" {% if filter_branch_id_val == branch_id_val %}selected{% endif %}>{{ branch.branch_name }}</option>
+      {% endfor %}
+    </select>
+    </div>
+    {% endif %}
+    <div>
+    <label for="status-filter" class="sr-only">Filter by status</label>
+    <select 
+      id="status-filter" 
+      name="status" 
+      autocomplete="off" 
+      class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-4 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+    >
+      <option value="">All Status</option>
+      {% set current_status = (current_filters.get('status') or '')|lower if current_filters else '' %}
+      <option value="active" {% if current_status == 'active' or current_status == 'open' %}selected{% endif %}>Active</option>
+      <option value="closed" {% if current_status == 'closed' %}selected{% endif %}>Closed</option>
+    </select>
+    </div>
+  </div>
+</section>
+
+<!-- 3. JOBS TABLE -->
+<section class="card rounded-2xl bg-gray-900/80 border border-gray-800 overflow-hidden">
+  {% if jobs %}
+  <div class="p-4 border-b border-gray-800 bg-gray-900/50 flex items-center justify-between">
+    <div class="flex items-center gap-2 text-sm text-gray-400">
+      <i class="fas fa-list text-red-500"></i>
+      <span>Showing <span class="text-white font-semibold">{{ jobs|length }}</span> job posting{{ 's' if jobs|length != 1 else '' }}</span>
+      {% if current_filters.get('keyword') %}
+      <span class="text-gray-600">•</span>
+      <span>matching "<span class="text-red-400 font-medium">{{ current_filters.get('keyword') }}</span>"</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-800/70 text-gray-300 uppercase text-xs border-b border-gray-700">
+        <tr>
+          <th class="px-6 py-4 text-left">Job Title</th>
+          <th class="px-6 py-4 text-left">Branch</th>
+          <th class="px-6 py-4 text-center">Applications</th>
+          <th class="px-6 py-4 text-center">Status</th>
+          <th class="px-6 py-4 text-left">Date Posted</th>
+          <th class="px-6 py-4 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-800">
+        {% for job in jobs %}
+        {% set raw_status = (job.status or 'open')|lower %}
+        {# Map database status 'open' to display as 'active', and 'draft' to 'active' as well #}
+        {% if raw_status == 'open' or raw_status == 'draft' %}
+          {% set status = 'active' %}
+        {% else %}
+          {% set status = raw_status %}
+        {% endif %}
+        {% set status_class = {
+          'active': 'bg-green-600/20 text-green-300 border-green-600/40',
+          'published': 'bg-green-600/20 text-green-300 border-green-600/40',
+          'draft': 'bg-gray-600/20 text-gray-300 border-gray-600/40',
+          'closed': 'bg-black/40 text-gray-400 border-gray-700/40',
+          'open': 'bg-green-600/20 text-green-300 border-green-600/40'
+        }.get(status, 'bg-gray-600/20 text-gray-300 border-gray-600/40') %}
+        <tr class="table-row-hover" data-job-id="{{ job.job_id }}" data-status="{{ status }}" data-branch="{{ (job.branch_name or 'All Branches')|lower }}" data-title="{{ (job.job_title or '')|lower }}">
+          <td class="px-6 py-4">
+            <div>
+              {% if current_filters.get('keyword') %}
+                {% set keyword = current_filters.get('keyword') %}
+                {% set job_title = (job.job_title or job.title)|string %}
+                <p class="font-semibold text-white" data-search-keyword="{{ keyword|lower }}">
+                  {{ job_title }}
+                </p>
+              {% else %}
+                <p class="font-semibold text-white">{{ job.job_title or job.title }}</p>
+              {% endif %}
+            </div>
+          </td>
+          <td class="px-6 py-4 text-gray-300">{{ job.branch_name or 'All Branches' }}</td>
+          <td class="px-6 py-4 text-center">
+              <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-600/20 text-red-300 text-sm font-semibold">
+                {{ job.application_count or 0 }}
+              </span>
+          </td>
+          <td class="px-6 py-4 text-center">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border {{ status_class }}">
+              {% if status == 'active' %}Active{% elif status == 'closed' %}Closed{% else %}Active{% endif %}
+            </span>
+          </td>
+          <td class="px-6 py-4 text-gray-300">
+            {% if job.posted_at or job.created_at %}
+              {{ (job.posted_at or job.created_at)|format_human_datetime }}
+            {% else %}
+              
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 text-right">
+            <div class="flex items-center justify-end gap-2">
+              <button onclick="window.viewJobDetails({{ job.job_id }})" class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors" title="Job Details">
+                Job Details
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="px-6 py-16 text-center">
+            <div class="flex flex-col items-center justify-center">
+              {% if current_filters.get('keyword') or current_filters.get('status') or current_filters.get('branch_id') %}
+              <i class="fas fa-search text-5xl text-gray-600 mb-4 opacity-50"></i>
+              <p class="text-xl font-semibold text-white mb-2">No job postings found</p>
+              <p class="text-sm text-gray-400 mb-4">Try adjusting your search criteria or filters</p>
+              <a href="{{ url_for('job_postings') }}" class="text-red-400 hover:text-red-300 text-sm font-medium flex items-center gap-2 transition-colors">
+                <i class="fas fa-times"></i>
+                Clear all filters
+              </a>
+              {% else %}
+              <i class="fas fa-briefcase text-5xl text-gray-600 mb-4 opacity-50"></i>
+              <p class="text-xl font-semibold text-white mb-2">No job postings available</p>
+              <p class="text-sm text-gray-400 mb-4">Get started by creating your first job posting</p>
+              <button onclick="window.openAddModal()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
+                <i class="fas fa-plus mr-2"></i>Create Job Posting
+              </button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 4. ADD/EDIT JOB FORM MODAL -->
+<div id="job-modal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <div class="p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+      <h3 class="text-xl font-bold text-white" id="modal-title">Add New Job</h3>
+      <button onclick="window.closeModal('job-modal')" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    
+    <form method="POST" class="p-6 space-y-6" id="job-form" action="{{ url_for('job_postings') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" id="form-action" value="add">
+      <input type="hidden" name="job_id" id="job-id" value="">
+
+      <!-- Basic Information -->
+      <div>
+        <h4 class="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">Basic Information</h4>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="title" class="block text-sm font-medium text-gray-300 mb-2">Job Title *</label>
+            <input type="text" name="job_title" id="title" required 
+                 class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-white placeholder-gray-400"
+                 placeholder="e.g., Sales Associate">
+        </div>
+        {% if current_branch %}
+        <!-- HR assigned to specific branch - show branch name as read-only -->
+        <div>
+            <label for="branch-display" class="block text-sm font-medium text-gray-300 mb-2">Branch</label>
+            <div class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-300 flex items-center">
+              <i class="fas fa-lock text-red-400 mr-2"></i>
+              <span class="font-semibold">{{ current_branch.branch_name }}</span>
+            </div>
+            <!-- Hidden input to submit the branch_id -->
+            <input type="hidden" name="branch_id" value="{{ current_branch.branch_id }}">
+            <p class="text-xs text-gray-500 mt-1">Your assigned branch - jobs can only be posted here</p>
+        </div>
+        {% else %}
+        <!-- HR with all branches access - show dropdown -->
+        <div>
+            <label for="branch-id" class="block text-sm font-medium text-gray-300 mb-2">Branch</label>
+            <select name="branch_id" id="branch-id"
+                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-white">
+              <option value="all">Assign to All Branches</option>
+              {% for branch in branches %}
+              <option value="{{ branch.branch_id }}">
+                {{ branch.branch_name }}
+              </option>
+              {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <div>
+          <label for="status" class="block text-sm font-medium text-gray-300 mb-2">Status *</label>
+          <select name="status" id="status" required
+                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-white">
+            <option value="active" selected>Active</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        </div>
+      </div>
+
+      <!-- Job Details -->
+      <div>
+        <h4 class="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-800">Job Details</h4>
+        <div class="space-y-4">
+      <div>
+            <label for="description" class="block text-sm font-medium text-gray-300 mb-2">Job Description *</label>
+            <textarea name="job_description" id="description" required rows="6"
+                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-white placeholder-gray-400 resize-none"
+                  placeholder="Enter detailed job description..."></textarea>
+          </div>
+          <div>
+            <label for="requirements" class="block text-sm font-medium text-gray-300 mb-2">Requirements *</label>
+            <textarea name="job_requirements" id="requirements" required rows="4"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-white placeholder-gray-400 resize-none"
+                      placeholder="Enter requirements (one per line or separated by commas)"></textarea>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="allowed-extensions" class="block text-sm font-medium text-gray-300 mb-2">Allowed File Extensions</label>
+              <input type="text" name="allowed_extensions" id="allowed-extensions" placeholder="e.g., pdf,doc,docx"
+                     class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400">
+              <p class="text-xs text-gray-500 mt-1">Comma-separated extensions (no dots). Empty = default site policy.</p>
+            </div>
+            <div>
+              <label for="max-file-size" class="block text-sm font-medium text-gray-300 mb-2">Max File Size (MB)</label>
+              <input type="number" name="max_file_size_mb" id="max-file-size" min="1" step="1" value="10"
+                     class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400">
+              <p class="text-xs text-gray-500 mt-1">Per-file maximum size for attachments (MB).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Form Actions -->
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-800 sticky bottom-0 bg-gray-900/95 backdrop-blur-md">
+        <button type="button" onclick="window.closeModal('job-modal')" 
+                class="px-6 py-3 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors font-medium">
+          Cancel
+        </button>
+        <button type="submit" 
+                class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-lg"
+                id="submit-job-btn">
+          Post Job
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 5. JOB DETAILS MODAL -->
+<div id="job-details-modal" class="modal-overlay hidden">
+  <div class="modal-content modal-large">
+    <div class="p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+      <h3 class="text-xl font-bold text-white">Job Details</h3>
+      <button onclick="window.closeModal('job-details-modal')" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+        <i class="fas fa-times text-lg"></i>
+      </button>
+    </div>
+    <div id="job-details-content" class="p-6">
+      <!-- Content will be loaded dynamically -->
+    </div>
+    <div class="p-6 border-t border-gray-800 flex items-center justify-end gap-3 sticky bottom-0 bg-gray-900/95 backdrop-blur-md">
+      <button onclick="window.closeModal('job-details-modal')" 
+              class="px-6 py-3 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors font-medium">
+        Cancel
+      </button>
+      <button id="edit-job-from-details-btn" 
+              class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-lg">
+        <i class="fas fa-edit mr-2"></i>Edit Job
+      </button>
+    </div>
+  </div>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Date formatting function - handles various date formats and ensures correct timezone
+function formatDateTime(dateValue) {
+  if (!dateValue || dateValue === 'None' || dateValue === 'null' || dateValue === '') return '';
+    
+    try {
+        let date;
+        
+        // Handle string dates
+        if (typeof dateValue === 'string') {
+            // Remove any extra whitespace
+            dateValue = dateValue.trim();
+            
+            // Check if already formatted (e.g., "Jan 15, 2025 02:30 PM" from backend)
+            // If it matches the expected format, return as-is
+            if (/^[A-Za-z]{3} \d{1,2}, \d{4} \d{2}:\d{2} (AM|PM)$/.test(dateValue)) {
+                return dateValue;
+            }
+            
+            // Try ISO format first (with T separator)
+            if (dateValue.includes('T')) {
+                date = new Date(dateValue);
+            } 
+            // Try MySQL datetime format: YYYY-MM-DD HH:MM:SS or YYYY-MM-DD HH:MM:SS.microseconds
+            else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(dateValue)) {
+                // Replace space with T to make it ISO-like for parsing
+                // Handle microseconds if present
+                const cleanDate = dateValue.split('.')[0];
+                const isoString = cleanDate.replace(' ', 'T');
+                date = new Date(isoString);
+            }
+            // Try date-only format: YYYY-MM-DD
+            else if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                date = new Date(dateValue + 'T00:00:00');
+            }
+            // Try standard Date parsing
+            else {
+                date = new Date(dateValue);
+            }
+        } 
+        // Handle Date objects
+        else if (dateValue instanceof Date) {
+            date = dateValue;
+        }
+        // Handle numbers (timestamps)
+        else if (typeof dateValue === 'number') {
+            date = new Date(dateValue);
+        }
+        else {
+            return String(dateValue);
+        }
+        
+        // Check if date is valid
+        if (!date || isNaN(date.getTime())) {
+          console.warn('Invalid date value:', dateValue);
+          return '';
+        }
+        
+        // Use local timezone to format date correctly
+        // Format: "Jan 15, 2025 02:30 PM" (12-hour format, local time)
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const month = months[date.getMonth()];
+        const day = date.getDate();
+        const year = date.getFullYear();
+        let hours = date.getHours();
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12; // the hour '0' should be '12'
+        const hoursStr = String(hours).padStart(2, '0');
+        
+        return `${month} ${day}, ${year} ${hoursStr}:${minutes} ${ampm}`;
+    } catch (e) {
+      console.error('Error formatting date:', e, dateValue);
+      return '';
+    }
+}
+
+// Job data store
+const jobData = {{ jobs|tojson|safe }};
+
+// Modal functions
+// Make all functions globally accessible
+window.openModal = function(id) {
+  const modal = document.getElementById(id);
+  if (modal) {
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+};
+
+window.closeModal = function(id) {
+  const modal = document.getElementById(id);
+  if (modal) {
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+};
+
+// Open add job modal
+window.openAddModal = function() {
+    const form = document.getElementById('job-form');
+    const titleEl = document.getElementById('modal-title');
+    
+    if (form && titleEl) {
+        form.reset();
+        // Reset form action to job_postings route for adding
+        form.action = '{{ url_for("job_postings") }}';
+        form.method = 'POST';
+        
+        // Ensure CSRF token exists
+        let csrfToken = form.querySelector('input[name="csrf_token"]');
+        if (!csrfToken) {
+            csrfToken = document.createElement('input');
+            csrfToken.type = 'hidden';
+            csrfToken.name = 'csrf_token';
+            csrfToken.value = '{{ csrf_token() }}';
+            form.insertBefore(csrfToken, form.firstChild);
+        }
+        
+        document.getElementById('form-action').value = 'add';
+        document.getElementById('job-id').value = '';
+        titleEl.textContent = 'Add New Job';
+        
+        // Update button text to "Post Job" when adding
+        const submitBtn = document.getElementById('submit-job-btn');
+        if (submitBtn) submitBtn.textContent = 'Post Job';
+        
+        // Reset branch selector (default to 'all' = Assign to All Branches)
+        const branchSelect = document.getElementById('branch-id');
+        if (branchSelect) {
+          branchSelect.value = 'all';
+        }
+        
+        // Set status dropdown to active when adding new job
+        const statusSelect = document.getElementById('status');
+        if (statusSelect) {
+            statusSelect.value = 'active';
+        }
+    }
+    
+    window.openModal('job-modal');
+};
+
+// Edit job
+window.editJob = function(jobId) {
+  const job = jobData.find(j => j.job_id == jobId);
+  if (!job) {
+    alert('Job not found');
+    return;
+  }
+  
+    const form = document.getElementById('job-form');
+    const titleEl = document.getElementById('modal-title');
+    
+    if (form && titleEl) {
+        // Set form action to update route
+        const updateUrl = '{{ url_for("update_job_posting", job_id=0) }}'.replace('0', job.job_id);
+        form.action = updateUrl;
+        form.method = 'POST';
+        
+        // Ensure CSRF token exists
+        let csrfToken = form.querySelector('input[name="csrf_token"]');
+        if (!csrfToken) {
+            csrfToken = document.createElement('input');
+            csrfToken.type = 'hidden';
+            csrfToken.name = 'csrf_token';
+            csrfToken.value = '{{ csrf_token() }}';
+            form.insertBefore(csrfToken, form.firstChild);
+        }
+        
+        document.getElementById('job-id').value = job.job_id;
+        document.getElementById('title').value = job.job_title || job.title || '';
+        document.getElementById('description').value = job.job_description || job.description || '';
+        document.getElementById('requirements').value = job.job_requirements || job.requirements || '';
+        const allowedExtEl = document.getElementById('allowed-extensions');
+        if (allowedExtEl) allowedExtEl.value = job.allowed_extensions || job.allowed_extensions || '';
+        const maxFileEl = document.getElementById('max-file-size');
+        if (maxFileEl) maxFileEl.value = job.max_file_size_mb || job.max_file_size_mb || 10;
+        
+        // Set branch selector (use 'all' when job.branch_id is empty/null)
+        const branchSelect = document.getElementById('branch-id');
+        if (branchSelect) {
+          branchSelect.value = job.branch_id ? job.branch_id : 'all';
+        }
+        
+        // Set status dropdown when editing
+        const statusSelect = document.getElementById('status');
+        if (statusSelect) {
+            let statusValue = job.status || 'open';
+            if (statusValue === 'open' || statusValue === 'draft' || statusValue === 'published') {
+                statusValue = 'active';
+            } else if (statusValue === 'closed' || statusValue === 'archived') {
+                statusValue = 'closed';
+            } else {
+                statusValue = 'active';
+            }
+            statusSelect.value = statusValue;
+        }
+        
+        titleEl.textContent = 'Edit Job';
+        
+        // Update button text to "Update Job" when editing
+        const submitBtn = document.getElementById('submit-job-btn');
+        if (submitBtn) submitBtn.textContent = 'Update Job';
+    }
+    
+    window.openModal('job-modal');
+};
+
+// View job details
+window.viewJobDetails = function(jobId) {
+  const job = jobData.find(j => j.job_id == jobId);
+  if (!job) {
+    alert('Job not found');
+    return;
+  }
+  
+  const content = document.getElementById('job-details-content');
+  let rawStatus = (job.status || 'draft').toLowerCase();
+  // Map 'open' (database value) to 'active' (display value)
+  const status = rawStatus === 'open' ? 'active' : rawStatus;
+  const statusClass = {
+    'active': 'bg-green-600/20 text-green-300 border-green-600/40',
+    'published': 'bg-green-600/20 text-green-300 border-green-600/40',
+    'draft': 'bg-gray-600/20 text-gray-300 border-gray-600/40',
+    'closed': 'bg-black/40 text-gray-400 border-gray-700/40',
+    'open': 'bg-green-600/20 text-green-300 border-green-600/40'
+  }[status] || 'bg-gray-600/20 text-gray-300 border-gray-600/40';
+  
+  content.innerHTML = `
+    <div class="space-y-6">
+      <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+        <h4 class="text-xl font-bold text-white mb-4">${job.job_title || job.title}</h4>
+        <div class="space-y-3 text-sm">
+            <div class="flex items-center gap-3">
+            <i class="fas fa-code-branch text-red-400 w-5"></i>
+            <span class="text-gray-300">${job.branch_name || 'All Branches'}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <i class="fas fa-calendar text-red-400 w-5"></i>
+            <span class="text-gray-300">Posted: ${formatDateTime(job.posted_at || job.created_at)}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <i class="fas fa-users text-red-400 w-5"></i>
+            <span class="text-gray-300">${job.application_count || 0} Applications</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+        <h5 class="text-lg font-semibold text-white mb-3">Job Description</h5>
+        <p class="text-gray-300 whitespace-pre-wrap">${job.job_description || job.description || 'No description provided'}</p>
+      </div>
+      
+      <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+        <h5 class="text-lg font-semibold text-white mb-3">Requirements</h5>
+        <p class="text-gray-300 whitespace-pre-wrap">${job.job_requirements || job.requirements || 'No requirements specified'}</p>
+      </div>
+    </div>
+  `;
+  
+  // Set up edit button to open edit modal
+  const editBtn = document.getElementById('edit-job-from-details-btn');
+  if (editBtn) {
+    editBtn.onclick = function() {
+      window.closeModal('job-details-modal');
+      window.editJob(jobId);
+    };
+  }
+  
+  window.openModal('job-details-modal');
+};
+
+// Delete job
+window.deleteJob = function(jobId, jobTitle) {
+  openConfirmWithCallback(function() {
+    const formData = new FormData();
+    formData.append('action', 'delete');
+    formData.append('job_id', jobId);
+    formData.append('csrf_token', '{{ csrf_token() }}');
+
+    const row = document.querySelector(`tr[data-job-id="${jobId}"]`);
+    if (row) {
+      row.style.opacity = '0.5';
+      row.style.pointerEvents = 'none';
+    }
+
+    fetch('{{ url_for("job_postings") }}', {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => {
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+      if (response.ok) {
+        if (isJson) {
+          return response.json().then(data => {
+            if (data.success) {
+              if (row) {
+                row.style.transition = 'opacity 0.3s ease-out';
+                row.style.opacity = '0';
+                setTimeout(() => {
+                  row.remove();
+                  const tbody = document.querySelector('tbody');
+                  if (tbody && tbody.children.length === 0) window.location.reload();
+                }, 300);
+              } else {
+                window.location.reload();
+              }
+            } else {
+              alert(data.error || 'Failed to delete job posting.');
+              if (row) { row.style.opacity = '1'; row.style.pointerEvents = ''; }
+            }
+          });
+        } else {
+          window.location.reload();
+        }
+      } else {
+        return response.json().then(data => {
+          alert(data.error || 'Failed to delete job posting.');
+          if (row) { row.style.opacity = '1'; row.style.pointerEvents = ''; }
+        }).catch(() => {
+          alert('An error occurred. Please try again.');
+          if (row) { row.style.opacity = '1'; row.style.pointerEvents = ''; }
+        });
+      }
+    })
+    .catch(err => {
+      console.error('Error deleting job:', err);
+      alert('An error occurred while deleting the job posting. Please try again.');
+      if (row) { row.style.opacity = '1'; row.style.pointerEvents = ''; }
+    });
+  }, `Are you sure you want to delete "${jobTitle}"?\n\nThis action cannot be undone and will permanently remove the job posting from the system.`);
+};
+
+// Search and filter with URL parameters (same as admin job_postings.html)
+function applyFilters() {
+  const searchInput = document.getElementById('keyword-filter');
+  const branchFilter = document.getElementById('branch-filter');
+  const statusFilter = document.getElementById('status-filter');
+  const keyword = searchInput?.value || '';
+  const branch = branchFilter?.value || '';
+  const status = statusFilter?.value || '';
+  
+  // Build URL with filters
+  const params = new URLSearchParams();
+  if (keyword.trim()) {
+    params.set('keyword', keyword.trim());
+  }
+  if (branch && branch !== 'all') {
+    params.set('branch_id', branch);
+  }
+  if (status) {
+    params.set('status', status);
+  }
+  
+  // Update URL and reload
+  const url = new URL(window.location.href);
+  url.search = params.toString();
+  window.location.href = url.toString();
+}
+
+// Filters + modal helpers
+document.addEventListener('DOMContentLoaded', function() {
+  // Debounce search input to avoid too many requests
+  let searchTimeout;
+  document.getElementById('keyword-filter')?.addEventListener('input', function(e) {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(function() {
+      applyFilters();
+    }, 500); // Wait 500ms after user stops typing
+  });
+  
+  // Apply filters immediately on filter change
+  document.getElementById('branch-filter')?.addEventListener('change', function(e) {
+    applyFilters();
+  });
+  
+  document.getElementById('status-filter')?.addEventListener('change', function(e) {
+    applyFilters();
+  });
+  
+  // Allow Enter key to submit search immediately
+  document.getElementById('keyword-filter')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(searchTimeout);
+      applyFilters();
+    }
+  });
+  
+  // Close modals on ESC
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay').forEach(modal => {
+        if (!modal.classList.contains('hidden')) {
+          closeModal(modal.id);
+        }
+      });
+    }
+  });
+  
+  // Close modals on outside click
+  document.querySelectorAll('.modal-overlay').forEach(modal => {
+    modal.addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeModal(this.id);
+      }
+    });
+  });
+});
+
+// Export jobs
+window.exportJobs = function() {
+  const jobsToExport = jobData;
+  
+  // Simple CSV export
+  const headers = ['Job Title', 'Branch', 'Status', 'Applications', 'Date Posted'];
+  const rows = jobsToExport.map(job => [
+    job.job_title || job.title || '',
+    job.branch_name || '',
+    job.status || '',
+    job.application_count || 0,
+    job.posted_at || job.created_at || ''
+  ]);
+  
+  const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `jobs_export_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}

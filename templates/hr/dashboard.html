@@ -1,0 +1,556 @@
+{% extends "hr/_base.html" %}
+
+{% block title %}HR Dashboard  J&T Express{% endblock %}
+
+{# Ensure dashboard data alias is defined before extra_css uses it #}
+{% set dd = dashboard_data or {} %}
+
+{% block extra_css %}
+{% set branch_info = dd.branch_info or {} %}
+{% set theme_css = dd.theme_css or '' %}
+{{ theme_css|safe }}
+<style>
+    body {
+        background: #0a0a0a;
+        color: #ffffff;
+    }
+    .hr-red {
+        color: #dc2626;
+    }
+    .bg-hr-red {
+        background-color: #dc2626;
+    }
+    .bg-hr-dark {
+        background-color: #111827;
+    }
+    .bg-hr-light {
+        background-color: #0a0a0a;
+    }
+    .branch-card {
+        transition: all 0.3s ease;
+        background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .branch-card:hover {
+        transform: translateY(-2px);
+        border-color: #dc2626;
+        box-shadow: 0 12px 40px rgba(220, 38, 38, 0.3);
+    }
+    .stat-card {
+        background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-left: 4px solid #dc2626;
+    }
+    .table-card {
+        background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set dd = dashboard_data or {} %}
+{% set user = dd.user or {} %}
+{% set stats = dd.stats or {} %}
+{% set branch_stats = dd.branch_stats or [] %}
+{% set recent_jobs = dd.recent_jobs_with_branch or dd.recent_jobs or [] %}
+{% set recent_applicants = dd.recent_applicants_with_branch or dd.recent_applications or [] %}
+
+<!-- Main Content -->
+<div class="flex-1 overflow-auto bg-hr-light">
+    <!-- Top Bar -->
+    <header class="bg-black border-b-2 border-red-600/50 shadow-lg p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="flex items-center gap-3">
+        <h2 class="text-2xl font-bold text-white">HR Dashboard{% if dd.branch_info %} - {{ dd.branch_info.branch_name }}{% endif %}</h2>
+        </div>
+        {% if dd.branch_info %}
+        <div class="mt-3 md:mt-0 text-sm text-gray-300">
+            <span>Viewing dashboard for your assigned branch</span>
+        </div>
+        {% endif %}
+    </header>
+
+    {% if not dd.branch_info %}
+    <!-- Branch Selector -->
+    <div class="p-6 bg-gradient-to-r from-black via-gray-900 to-black border-b-2 border-red-600/30">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-red-600/20 rounded-lg border border-red-600/30">
+                    <i class="fas fa-code-branch text-hr-red text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">Branch Filter</h3>
+                    <p class="text-sm text-gray-400">Select a branch to view branch-specific data</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <label for="branch-select" class="text-sm font-medium text-gray-300 hidden md:block">
+                    Filter by Branch:
+                </label>
+                <select id="branch-select" name="branch_id" 
+                        class="px-4 py-2.5 bg-gray-900 border-2 border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 min-w-[200px] transition-all hover:border-red-600/50">
+                    <option value="all" {% if not dd.selected_branch_id %}selected{% endif %}>All Branches</option>
+                    {% for branch in dd.all_branches or [] %}
+                    <option value="{{ branch.branch_id }}" {% if (dd.selected_branch_id and dd.selected_branch_id == branch.branch_id|string) %}selected{% endif %}>
+                        {{ branch.branch_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Branch Overview Cards -->
+    <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="branch-cards">
+        {% if dd.branch_info %}
+            {# Show only the assigned branch card for scoped HR users #}
+            {% set b = dd.branch_info %}
+            <div class="rounded-xl shadow-lg p-6 branch-card transition-all" data-branch-id="{{ b.branch_id }}">
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
+                        <h3 class="text-lg font-bold text-white">{{ b.branch_name or 'All Branches' }}</h3>
+                    <span class="px-2 py-1 bg-green-600/20 text-green-400 border border-green-600/30 text-xs rounded-full">Active</span>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-hr-red">{{ (branch_stats | selectattr('branch_id','equalto', b.branch_id) | list)[0].open_jobs if branch_stats and (branch_stats | selectattr('branch_id','equalto', b.branch_id) | list) else 0 }}</div>
+                        <div class="text-gray-400 text-sm">Open Job Positions</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-hr-red">{{ (branch_stats | selectattr('branch_id','equalto', b.branch_id) | list)[0].applicants if branch_stats and (branch_stats | selectattr('branch_id','equalto', b.branch_id) | list) else 0 }}</div>
+                        <div class="text-gray-400 text-sm">Applicants</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-hr-red">{{ (branch_stats | selectattr('branch_id','equalto', b.branch_id) | list)[0].interviews_today if branch_stats and (branch_stats | selectattr('branch_id','equalto', b.branch_id) | list) else 0 }}</div>
+                        <div class="text-gray-400 text-sm">Interviews</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-hr-red">{{ (branch_stats | selectattr('branch_id','equalto', b.branch_id) | list)[0].hires if branch_stats and (branch_stats | selectattr('branch_id','equalto', b.branch_id) | list) else 0 }}</div>
+                        <div class="text-gray-400 text-sm">Hires This Month</div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            {% if branch_stats %}
+                {% for branch_stat in branch_stats %}
+                 <div class="rounded-xl shadow-lg p-6 branch-card transition-all {% if dd.selected_branch_id and dd.selected_branch_id != branch_stat.branch_id|string %}opacity-50{% endif %}" 
+                     data-branch-id="{{ branch_stat.branch_id }}"
+                     {% if dd.selected_branch_id and dd.selected_branch_id != branch_stat.branch_id|string %}style="display: none;"{% endif %}>
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
+                        <h3 class="text-lg font-bold text-white">{{ branch_stat.branch_name or 'All Branches' }}</h3>
+                        <span class="px-2 py-1 bg-green-600/20 text-green-400 border border-green-600/30 text-xs rounded-full">Active</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-hr-red">{{ branch_stat.open_jobs or 0 }}</div>
+                            <div class="text-gray-400 text-sm">Open Job Positions</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-hr-red">{{ branch_stat.applicants or 0 }}</div>
+                            <div class="text-gray-400 text-sm">Applicants</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-hr-red">{{ branch_stat.interviews_today or 0 }}</div>
+                            <div class="text-gray-400 text-sm">Interviews</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-hr-red">{{ branch_stat.hires or 0 }}</div>
+                            <div class="text-gray-400 text-sm">Hires This Month</div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% elif dd.all_branches and dd.all_branches|length > 0 %}
+                {# Fallback: render branch cards using branch names but zeroed stats if stats calculation failed #}
+                {% for branch in dd.all_branches %}
+                <div class="rounded-xl shadow-lg p-6 branch-card transition-all {% if dd.selected_branch_id and dd.selected_branch_id != branch.branch_id|string %}opacity-50{% endif %}" data-branch-id="{{ branch.branch_id }}">
+                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
+                        <h3 class="text-lg font-bold text-white">{{ branch.branch_name or 'All Branches' }}</h3>
+                        <span class="px-2 py-1 bg-green-600/20 text-green-400 border border-green-600/30 text-xs rounded-full">Active</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-hr-red">0</div>
+                            <div class="text-gray-400 text-sm">Open Job Positions</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-hr-red">0</div>
+                            <div class="text-gray-400 text-sm">Applicants</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-hr-red">0</div>
+                            <div class="text-gray-400 text-sm">Interviews</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-hr-red">0</div>
+                            <div class="text-gray-400 text-sm">Hires This Month</div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-span-full rounded-xl shadow-lg border border-gray-800 p-6 text-center text-gray-500 bg-gray-900/50">
+                    <i class="fas fa-building text-4xl mb-3 text-gray-600"></i>
+                    <p>No branch data available</p>
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <!-- Job Postings & Recent Applicants -->
+    {% if dd.branch_info %}
+    <div class="p-6 space-y-6">
+    {% else %}
+    <div class="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+    {% endif %}
+        <!-- Job Postings -->
+        <div class="table-card rounded-xl shadow-lg">
+            <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-white">Job Postings{% if dd.branch_info %} - {{ dd.branch_info.branch_name }}{% else %} - All Branches{% endif %}</h3>
+            </div>
+            <div class="p-4 overflow-x-auto">
+                <table class="w-full min-w-[600px]">
+                    <thead>
+                        <tr class="text-left text-gray-400 border-b border-gray-800">
+                            <th class="pb-3 font-semibold">Job Title</th>
+                            <th class="pb-3 font-semibold">Branch</th>
+                            <th class="pb-3 font-semibold">Applications</th>
+                            <th class="pb-3 font-semibold">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in recent_jobs[:5] %}
+                        <tr class="border-b border-gray-800 hover:bg-gray-900/50 transition-colors" data-branch-id="{{ job.branch_id or '' }}">
+                            <td class="py-3 text-white">{{ job.job_title or job.title or 'Untitled Job' }}</td>
+                            <td class="py-3 text-gray-400">{{ job.branch_name or 'All Branches' }}</td>
+                            <td class="py-3 text-white">{{ job.application_count or 0 }}</td>
+                            <td class="py-3">
+                                {% set job_status = (job.status or 'open')|lower %}
+                                {% if job_status in ['open', 'published', 'active'] %}
+                                <span class="px-2 py-1 bg-green-600/20 text-green-400 border border-green-600/30 rounded-full text-xs">Open</span>
+                                {% else %}
+                                <span class="px-2 py-1 bg-red-600/20 text-red-400 border border-red-600/30 rounded-full text-xs">Closed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="py-8 text-center text-gray-500">
+                                <i class="fas fa-briefcase text-2xl mb-2 text-gray-600"></i>
+                                <p>No job postings found</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Applicants -->
+        <div class="table-card rounded-xl shadow-lg">
+            <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-white">Recent Applicants{% if dd.branch_info %} - {{ dd.branch_info.branch_name }}{% else %} - All Branches{% endif %}</h3>
+                {% if not dd.branch_info %}
+                <a href="{{ url_for('applicants') }}" class="text-hr-red hover:text-red-400 text-sm font-medium">
+                    <i class="fas fa-filter mr-2"></i>View All
+                </a>
+                {% endif %}
+            </div>
+            <div class="p-4 overflow-x-auto">
+                <table class="w-full min-w-[600px]">
+                    <thead>
+                        <tr class="text-left text-gray-400 border-b border-gray-800">
+                            <th class="pb-3 font-semibold">Name</th>
+                            <th class="pb-3 font-semibold">Job Position</th>
+                            <th class="pb-3 font-semibold">Branch</th>
+                            <th class="pb-3 font-semibold">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recent-applicants-body">
+                        {% for applicant in recent_applicants[:5] %}
+                        <tr class="border-b border-gray-800 hover:bg-gray-900/50 transition-colors" data-branch-id="{{ applicant.branch_id or '' }}">
+                            <td class="py-3 text-white">{{ applicant.applicant_name or applicant.full_name or 'Unknown' }}</td>
+                            <td class="py-3 text-gray-400">{{ applicant.job_title or 'N/A' }}</td>
+                            <td class="py-3 text-gray-400">{{ applicant.branch_name or 'All Branches' }}</td>
+                            <td class="py-3">
+                                {% set app_status = (applicant.status or 'pending')|lower %}
+                                {% set status_config = {
+                                    'pending': {'class': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'label': 'Pending'},
+                                    'interviewed': {'class': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30', 'label': 'Interviewed'},
+                                    'hired': {'class': 'bg-green-600/20 text-green-400 border-green-600/30', 'label': 'Hired'},
+                                    'rejected': {'class': 'bg-red-600/20 text-red-400 border-red-600/30', 'label': 'Rejected'},
+                                    'reviewed': {'class': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'label': 'Pending'},
+                                    'shortlisted': {'class': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'label': 'Pending'},
+                                    'accepted': {'class': 'bg-green-600/20 text-green-400 border-green-600/30', 'label': 'Hired'},
+                                    'applied': {'class': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'label': 'Pending'},
+                                    'under_review': {'class': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'label': 'Pending'},
+                                    'interview': {'class': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30', 'label': 'Interviewed'}
+                                } %}
+                                {% set current_status = status_config.get(app_status, {'class': 'bg-gray-600/20 text-gray-400 border-gray-600/30', 'label': app_status|title}) %}
+                                <span class="px-2 py-1 rounded-full text-xs border {{ current_status.class }}">
+                                    {{ current_status.label }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="py-8 text-center text-gray-500">
+                                <i class="fas fa-users text-2xl mb-2 text-gray-600"></i>
+                                <p>No applicants found</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    const select = document.getElementById('branch-select');
+    if (!select) return;
+
+    let _refreshBranchesRunning = false;
+    async function refreshBranches(){
+        return;
+        if (_refreshBranchesRunning) return;
+        _refreshBranchesRunning = true;
+        try{
+            const url = new URL('/api/branches', window.location.origin).toString();
+            const res = await fetch(url, { mode: 'same-origin', cache: 'no-store', keepalive: true });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.success) return;
+            const branches = data.branches || [];
+
+            // preserve current selection
+            const current = select.value;
+            // remove existing options except the 'all' option
+            const allOption = select.querySelector('option[value="all"]');
+            select.innerHTML = '';
+            if (allOption) select.appendChild(allOption);
+            // ensure 'All Branches' option exists
+            if (!select.querySelector('option[value="all"]')){
+                const opt = document.createElement('option');
+                opt.value = 'all'; opt.textContent = 'All Branches';
+                select.appendChild(opt);
+            }
+
+            for (const b of branches){
+                const opt = document.createElement('option');
+                opt.value = b.branch_id;
+                opt.textContent = b.branch_name;
+                select.appendChild(opt);
+            }
+
+            // If server-side didn't render branch cards, render minimal cards client-side
+            try{
+                const cardsContainer = document.getElementById('branch-cards');
+                if (cardsContainer) {
+                    // If container only contains the 'No branch data available' placeholder or is empty, render cards
+                    const hasMeaningfulCard = Array.from(cardsContainer.children).some(c => !c.classList.contains('col-span-full'));
+                    if (!hasMeaningfulCard) {
+                        // Clear existing placeholder
+                        cardsContainer.innerHTML = '';
+                        for (const b of branches) {
+                            const card = document.createElement('div');
+                            card.className = 'rounded-xl shadow-lg p-6 branch-card transition-all';
+                            card.setAttribute('data-branch-id', b.branch_id || '');
+                            card.innerHTML = `\
+                                <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">\
+                                    <h3 class="text-lg font-bold text-white">${escapeHtml(b.branch_name || 'All Branches')}</h3>\
+                                    <span class="px-2 py-1 bg-green-600/20 text-green-400 border border-green-600/30 text-xs rounded-full">Active</span>\
+                                </div>\
+                                <div class="grid grid-cols-2 gap-4">\
+                                    <div class="text-center">\
+                                        <div class="text-2xl font-bold text-hr-red">0</div>\
+                                        <div class="text-gray-400 text-sm">Open Job Positions</div>\
+                                    </div>\
+                                    <div class="text-center">\
+                                        <div class="text-2xl font-bold text-hr-red">0</div>\
+                                        <div class="text-gray-400 text-sm">Applicants</div>\
+                                    </div>\
+                                    <div class="text-center">\
+                                        <div class="text-2xl font-bold text-hr-red">0</div>\
+                                        <div class="text-gray-400 text-sm">Interviews</div>\
+                                    </div>\
+                                    <div class="text-center">\
+                                        <div class="text-2xl font-bold text-hr-red">0</div>\
+                                        <div class="text-gray-400 text-sm">Hires This Month</div>\
+                                    </div>\
+                                </div>`;
+                            cardsContainer.appendChild(card);
+                        }
+                        // Apply current selection to the newly rendered cards
+                        if (current && current !== 'all') {
+                            Array.from(cardsContainer.children).forEach(function(c){
+                                if (c.getAttribute('data-branch-id') !== String(current)) {
+                                    c.style.display = 'none';
+                                }
+                            });
+                        }
+                    }
+                }
+            }catch(e){ console.error('Failed to render branch cards client-side', e); }
+
+            // Restore selection if possible and apply card filtering
+            if (current){
+                const match = select.querySelector('option[value="' + current + '"]');
+                if (match) select.value = current;
+                // hide non-matching cards (server-rendered or client-rendered)
+                if (current !== 'all') {
+                    const cardsContainer = document.getElementById('branch-cards');
+                    if (cardsContainer) {
+                        Array.from(cardsContainer.children).forEach(function(c){
+                            if (c.getAttribute('data-branch-id') !== String(current)) {
+                                c.style.display = 'none';
+                            } else {
+                                c.style.display = '';
+                            }
+                        });
+                    }
+                }
+            }
+        }catch(e){
+            if (e && (e.name === 'AbortError' || String(e).includes('TypeError: Failed to fetch'))) {
+                // ignore aborted/preview fetch issues silently
+            } else {
+                console.warn('Branches refresh warning', e);
+            }
+        } finally {
+            _refreshBranchesRunning = false;
+        }
+    }
+
+    // Refresh on load
+    refreshBranches();
+    // Disabled auto-refresh on focus/visibility to avoid aborted fetches in preview environments
+
+    // Auto-refresh recent applicants section
+    async function fetchRecentApplicants(){
+        try{
+            const branchId = select ? select.value : 'all';
+            const url = '/api/recent-applicants' + (branchId && branchId !== 'all' ? ('?branch_id=' + encodeURIComponent(branchId)) : '');
+            const res = await fetch(url, { credentials: 'same-origin' });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.success) return;
+            const list = data.recent_applicants || [];
+            const tbody = document.getElementById('recent-applicants-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            for (const a of list){
+                const status = (a.status || 'pending').toLowerCase();
+                const statusMap = {
+                    'pending': ['bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'Pending'],
+                    'interviewed': ['bg-cyan-600/20 text-cyan-400 border-cyan-600/30', 'Interviewed'],
+                    'hired': ['bg-green-600/20 text-green-400 border-green-600/30', 'Hired'],
+                    'rejected': ['bg-red-600/20 text-red-400 border-red-600/30', 'Rejected'],
+                    'reviewed': ['bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'Pending'],
+                    'shortlisted': ['bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'Pending'],
+                    'accepted': ['bg-green-600/20 text-green-400 border-green-600/30', 'Hired'],
+                    'applied': ['bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'Pending'],
+                    'under_review': ['bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'Pending'],
+                    'interview': ['bg-cyan-600/20 text-cyan-400 border-cyan-600/30', 'Interviewed']
+                };
+                const cfg = statusMap[status] || ['bg-gray-600/20 text-gray-400 border-gray-600/30', (status||'').toUpperCase()];
+                const branchName = a.branch_name || 'All Branches';
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-800 hover:bg-gray-900/50 transition-colors';
+                row.setAttribute('data-branch-id', a.branch_id || '');
+                row.innerHTML = `
+                    <td class="py-3 text-white">${escapeHtml(a.applicant_name || 'Unknown')}</td>
+                    <td class="py-3 text-gray-400">${escapeHtml(a.job_title || 'N/A')}</td>
+                    <td class="py-3 text-gray-400">${escapeHtml(branchName)}</td>
+                    <td class="py-3"><span class="px-2 py-1 rounded-full text-xs border ${cfg[0]}">${cfg[1]}</span></td>
+                `;
+                tbody.appendChild(row);
+            }
+        }catch(e){ console.error('Failed to fetch recent applicants', e); }
+    }
+
+    // Initial fetch and interval
+    fetchRecentApplicants();
+    setInterval(fetchRecentApplicants, 15000); // every 15s
+
+    // Branch selector change handler - apply filter smoothly client-side
+    function applyBranchFilter(branchId) {
+        // update URL (no reload)
+        const url = new URL(window.location);
+        if (!branchId || branchId === 'all') {
+            url.searchParams.delete('branch_id');
+        } else {
+            url.searchParams.set('branch_id', branchId);
+        }
+        window.history.replaceState({}, '', url);
+
+        // Cards
+        const cardsContainer = document.getElementById('branch-cards');
+        if (cardsContainer) {
+            Array.from(cardsContainer.children).forEach(function(c){
+                const bid = c.getAttribute('data-branch-id') || '';
+                if (!branchId || branchId === 'all') {
+                    c.style.display = '';
+                } else {
+                    c.style.display = (String(bid) === String(branchId)) ? '' : 'none';
+                }
+            });
+        }
+
+        // Job rows: include global (branchless) rows when filtering by a specific branch
+        const jobRows = document.querySelectorAll('table .border-b[data-branch-id]');
+        Array.from(jobRows).forEach(function(r){
+            const bid = r.getAttribute('data-branch-id') || '';
+            if (!branchId || branchId === 'all') {
+                r.style.display = '';
+            } else {
+                // show rows that belong to the selected branch OR global rows (empty branch id)
+                r.style.display = (String(bid) === String(branchId) || bid === '') ? '' : 'none';
+            }
+        });
+
+        // Applicant rows: include global (branchless) rows when filtering by a specific branch
+        const appRows = document.querySelectorAll('table .border-b[data-branch-id]');
+        Array.from(appRows).forEach(function(r){
+            const bid = r.getAttribute('data-branch-id') || '';
+            if (!branchId || branchId === 'all') {
+                r.style.display = '';
+            } else {
+                r.style.display = (String(bid) === String(branchId) || bid === '') ? '' : 'none';
+            }
+        });
+    }
+
+    select.addEventListener('change', function() {
+        const selectedBranch = this.value;
+        // apply filter without page reload
+        applyBranchFilter(selectedBranch);
+    });
+});
+
+// Simple HTML escape to avoid injecting raw values
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+</script>
+{% endblock %}

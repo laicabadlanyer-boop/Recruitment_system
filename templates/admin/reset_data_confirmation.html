@@ -1,0 +1,116 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}Reset System Data • WHITEHAT 88{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="card rounded-xl bg-gradient-to-r from-red-900/50 via-red-900/30 to-black p-6 mb-6 border border-red-800/50">
+        <div class="flex items-center gap-3 mb-4">
+            <i class="fas fa-exclamation-triangle text-red-400 text-3xl"></i>
+            <h1 class="text-2xl font-bold text-white">Reset All System Data</h1>
+        </div>
+        <p class="text-gray-300 mb-4">
+            This action will permanently delete <strong>ALL</strong> data from the system, including:
+        </p>
+        <ul class="list-disc list-inside text-gray-300 mb-6 space-y-2 ml-4">
+            <li>All applications</li>
+            <li>All jobs/postings</li>
+            <li>All interviews</li>
+            <li>All notifications</li>
+            <li>All resumes</li>
+            <li>All applicant accounts</li>
+            <li>All activity logs</li>
+            <li>All saved jobs</li>
+        </ul>
+        <div class="bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-4 mb-6">
+            <p class="text-yellow-200 font-semibold mb-2">
+                <i class="fas fa-shield-alt mr-2"></i>
+                The following will be <strong>PRESERVED</strong>:
+            </p>
+            <ul class="list-disc list-inside text-yellow-100 ml-4 space-y-1">
+                <li>All Admin accounts</li>
+                <li>All HR accounts</li>
+                <li>All Branches</li>
+            </ul>
+        </div>
+        <div class="bg-red-900/30 border border-red-700/50 rounded-lg p-4 mb-6">
+            <p class="text-red-200 font-semibold">
+                <i class="fas fa-exclamation-circle mr-2"></i>
+                <strong>WARNING:</strong> This action cannot be undone! All data will be permanently deleted.
+            </p>
+        </div>
+    </div>
+    
+    <form method="POST" action="{{ url_for('reset_all_data') }}" class="card rounded-xl bg-gray-900/80 p-6" id="reset-form">
+        {% if csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% else %}
+            <input type="hidden" name="csrf_token" value="">
+        {% endif %}
+        <div class="mb-6">
+            <label for="confirm_text" class="block text-sm font-semibold text-gray-300 mb-2">
+                Type <strong class="text-red-400">RESET</strong> to confirm:
+            </label>
+            <input 
+                type="text" 
+                id="confirm_text" 
+                name="confirm_text" 
+                required
+                autocomplete="off"
+                placeholder="Type RESET to confirm"
+                class="w-full form-input px-4 py-3 rounded-lg bg-gray-800 border-gray-700 focus:border-red-500 transition-colors text-white"
+            >
+        </div>
+        
+        <div class="flex gap-4">
+            <button 
+                type="submit" 
+                class="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
+                onclick="return openConfirmOnFormSubmit(this.form, 'Are you absolutely sure you want to reset ALL system data? This cannot be undone!');"
+            >
+                <i class="fas fa-trash-alt mr-2"></i>
+                Reset All Data
+            </button>
+            <a 
+                href="{{ url_for('admin_dashboard') }}" 
+                class="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors text-center"
+            >
+                <i class="fas fa-times mr-2"></i>
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const confirmInput = document.getElementById('confirm_text');
+    const submitButton = form.querySelector('button[type="submit"]');
+    
+    // Disable submit button initially
+    submitButton.disabled = true;
+    submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+    
+    // Enable submit only when "RESET" is typed
+    confirmInput.addEventListener('input', function() {
+        if (this.value.trim().toUpperCase() === 'RESET') {
+            submitButton.disabled = false;
+            submitButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            submitButton.disabled = true;
+            submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    });
+    
+    // Additional confirmation on form submit
+    form.addEventListener('submit', function(e) {
+        if (confirmInput.value.trim().toUpperCase() !== 'RESET') {
+            e.preventDefault();
+            alert('Please type "RESET" to confirm.');
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,1595 @@
+{% extends "hr/_base.html" %}
+
+{% block title %}Applications • J&T Express{% endblock %}
+
+{% set current_filters = current_filters or {} %}
+{% set user = user or {} %}
+
+{% block extra_css %}
+<style>
+    .sidebar-item.active { border-color: #dc2626; background: rgba(220,38,38,.12); }
+    .action-btn { transition: all 0.2s ease; }
+    .action-btn:hover { transform: scale(1.1); }
+    
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .modal-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .modal-content {
+        background: #1f2937;
+        border-radius: 1rem;
+        padding: 1rem;
+        max-width: 90vw;
+        width: 500px;
+        max-height: 90vh;
+        overflow-y: auto;
+        transform: scale(0.9);
+        transition: transform 0.3s ease;
+        border: 1px solid #374151;
+    }
+    
+    @media (max-width: 640px) {
+        .modal-content {
+            width: 100vw;
+            max-width: 100vw;
+            height: 100vh;
+            max-height: 100vh;
+            border-radius: 0;
+            padding: 1rem;
+        }
+    }
+    
+    .modal-overlay.active .modal-content {
+        transform: scale(1);
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid #374151;
+        padding-bottom: 1rem;
+    }
+    
+    .modal-close {
+        background: none;
+        border: none;
+        color: #9ca3af;
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0.25rem;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+    }
+    
+    .modal-close:hover {
+        color: #fff;
+        background: #374151;
+    }
+    
+    /* Stats Grid Improvements */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 0.75rem;
+    }
+    
+    @media (max-width: 640px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+    }
+    
+    .stat-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+        border-color: #4b5563 !important;
+    }
+    
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, currentColor, transparent);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .stat-card:hover::before {
+        opacity: 1;
+    }
+
+    .status-select {
+        color: #fff !important;
+        transition: all 0.3s ease, background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    }
+    
+    .status-select:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .status-select:focus {
+        transform: scale(1.02);
+    }
+
+    .status-select option {
+        color: #111;
+        background: #fff;
+        padding: 8px;
+    }
+    
+    .status-select option[value="pending"] {
+        background: #fbbf24;
+        color: #fff;
+    }
+    
+    .status-select option[value="hired"] {
+        background: #10b981;
+        color: #fff;
+    }
+    
+    .status-select.status-updating {
+        opacity: 0.7;
+        position: relative;
+    }
+    
+    .status-select.status-updating::after {
+        content: '';
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+    }
+    
+    .status-select.status-success {
+        animation: pulse 0.5s ease-in-out;
+    }
+    
+    @keyframes spin {
+        to { transform: translateY(-50%) rotate(360deg); }
+    }
+    
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+    
+    .status-select option[value="rejected"] {
+        background: #ef4444;
+        color: #fff;
+    }
+    
+    .status-updating {
+        position: relative;
+    }
+    
+    .status-updating::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        right: 8px;
+        transform: translateY(-50%);
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+    }
+    
+    @keyframes spin {
+        to { transform: translateY(-50%) rotate(360deg); }
+    }
+    
+    .status-success {
+        animation: successPulse 0.5s ease;
+    }
+    
+    @keyframes successPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+    
+    /* Fix dropdown visibility - make options clear and readable */
+    select.form-input {
+        color: #ffffff !important;
+        background-color: #1f2937 !important;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 40px;
+    }
+    
+    /* Style for all select dropdowns */
+    select.form-input,
+    select.form-input:focus,
+    select.form-input:active {
+        color: #ffffff !important;
+        background-color: #1f2937 !important;
+    }
+    
+    /* Dropdown options styling - Note: Limited browser support for option styling */
+    select.form-input option {
+        color: #ffffff !important;
+        background-color: #1f2937 !important;
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+    
+    /* Selected option styling */
+    select.form-input option:checked {
+        background-color: #dc2626 !important;
+        color: #ffffff !important;
+        font-weight: 600;
+    }
+    
+    /* Ensure text is visible in the select element itself */
+    #job-position-filter,
+    #application-status-filter {
+        color: #ffffff !important;
+    }
+    
+    #job-position-filter option,
+    #application-status-filter option {
+        color: #ffffff !important;
+        background: #1f2937 !important;
+    }
+    
+    /* Responsive Table Container */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+    }
+    
+    @media (max-width: 1024px) {
+        .table-container {
+            display: block;
+        }
+    }
+    
+    /* Mobile Card View for Applications */
+    @media (max-width: 1024px) {
+        .table-container table {
+            display: none;
+        }
+        
+        .mobile-applications-list {
+            display: block;
+        }
+    }
+    
+    @media (min-width: 1025px) {
+        .mobile-applications-list {
+            display: none;
+        }
+    }
+    
+    .mobile-app-card {
+        background: rgba(31, 41, 55, 0.5);
+        border: 1px solid rgba(55, 65, 81, 0.8);
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .mobile-app-card:hover {
+        background: rgba(31, 41, 55, 0.7);
+        border-color: rgba(220, 38, 38, 0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="card rounded-xl bg-gradient-to-r from-gray-900 via-gray-900 to-black p-3 sm:p-4 md:p-5 mb-4">
+    <!-- Access Scope Indicator -->
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div>
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2">Application Management</h1>
+            <p class="text-gray-400 text-xs sm:text-sm md:text-base">Monitor every candidate from submission to final hiring decision with a branch-only workflow.</p>
+            <p class="text-xs sm:text-sm text-gray-500 mt-2">Total applications: <span class="font-semibold text-white">{{ analytics.total or applications|length or 0 }}</span></p>
+        </div>
+    </div>
+</header>
+
+{% if analytics %}
+<section class="content-section stats-grid">
+    <!-- Total Applications -->
+    <div class="stat-card card rounded-xl bg-gray-900/80 p-3 sm:p-4 text-center border border-gray-800 hover:border-red-500/40 transition-colors" 
+         onclick="window.openModal('totalModal')" role="button" tabindex="0" aria-label="View total applications" title="Click to view total applications">
+        <p class="text-xs text-gray-400 mb-1.5 font-semibold">Total</p>
+        <p class="text-xl sm:text-2xl font-bold text-white">{{ analytics.total or 0 }}</p>
+        <p class="text-xs text-gray-500 mt-1">All applications</p>
+    </div>
+
+    <!-- Pending Applications -->
+    <div class="stat-card card rounded-xl bg-gray-900/80 border border-gray-800 p-3 sm:p-4 text-center hover:border-red-500/40 transition-colors"
+         onclick="window.openModal('pendingModal')" role="button" tabindex="0" aria-label="View pending applications" title="Click to view pending applications">
+        <p class="text-xs text-gray-400 mb-1.5 font-semibold">Pending</p>
+        <p class="text-xl sm:text-2xl font-bold text-red-300">{{ analytics.pending or 0 }}</p>
+        <p class="text-xs text-gray-500 mt-1">Awaiting review</p>
+    </div>
+
+    <!-- Hired Applications -->
+    <div class="stat-card card rounded-xl bg-gray-900/80 border border-gray-800 p-3 sm:p-4 text-center hover:border-red-500/40 transition-colors"
+         onclick="window.openModal('hiredModal')" role="button" tabindex="0" aria-label="View hired applications" title="Click to view hired applications">
+        <p class="text-xs text-gray-400 mb-1.5 font-semibold">Hired</p>
+        <p class="text-xl sm:text-2xl font-bold text-red-300">{{ analytics.hired or 0 }}</p>
+        <p class="text-xs text-gray-500 mt-1">Candidates hired</p>
+    </div>
+
+    <!-- Rejected Applications -->
+    <div class="stat-card card rounded-xl bg-gray-900/80 border border-gray-800 p-3 sm:p-4 text-center hover:border-red-500/40 transition-colors"
+         onclick="window.openModal('rejectedModal')" role="button" tabindex="0" aria-label="View rejected applications" title="Click to view rejected applications">
+        <p class="text-xs text-gray-400 mb-1.5 font-semibold">Rejected</p>
+        <p class="text-xl sm:text-2xl font-bold text-red-300">{{ analytics.rejected or 0 }}</p>
+        <p class="text-xs text-gray-500 mt-1">Not proceeding</p>
+    </div>
+
+    <!-- Scheduled Applications -->
+    <div class="stat-card card rounded-xl bg-gray-900/80 border border-gray-800 p-3 sm:p-4 text-center hover:border-red-500/40 transition-colors"
+         onclick="window.openModal('scheduledModal')" role="button" tabindex="0" aria-label="View scheduled applications" title="Click to view scheduled applications">
+        <p class="text-xs text-gray-400 mb-1.5 font-semibold">Scheduled</p>
+        <p class="text-xl sm:text-2xl font-bold text-red-300">{{ analytics.scheduled or analytics.scheduled_applications or 0 }}</p>
+        <p class="text-xs text-gray-500 mt-1">Interviews scheduled</p>
+    </div>
+
+    <!-- Interviewed Applications -->
+    <div class="stat-card card rounded-xl bg-gray-900/80 border border-gray-800 p-3 sm:p-4 text-center hover:border-red-500/40 transition-colors"
+         onclick="window.openModal('interviewedModal')" role="button" tabindex="0" aria-label="View interviewed applications" title="Click to view interviewed applications">
+        <p class="text-xs text-gray-400 mb-1.5 font-semibold">Interviewed</p>
+        <p class="text-xl sm:text-2xl font-bold text-red-300">{{ analytics.interviewed or 0 }}</p>
+        <p class="text-xs text-gray-500 mt-1">Interviewed candidates</p>
+    </div>
+</section>
+{% endif %}
+
+<!-- Enhanced Search & Filters Section -->
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <h2 class="text-sm sm:text-base font-semibold flex items-center gap-2">
+            <i class="fas fa-filter text-red-400"></i>
+            Search & Filters
+        </h2>
+        <div class="flex items-center gap-2 text-xs text-gray-400 hidden sm:flex">
+            <i class="fas fa-info-circle"></i>
+            <span>Filter applications by multiple criteria</span>
+        </div>
+    </div>
+
+    <form id="applications-filter-form" method="GET" action="{{ url_for('applications') }}" class="space-y-4">
+        <!-- Main Filters Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <!-- Keyword Search -->
+            <div class="space-y-2">
+                <label for="keyword-search" class="block text-xs uppercase tracking-wide text-gray-400 font-semibold">
+                    <i class="fas fa-search mr-1"></i>Keyword Search
+                </label>
+                <input type="text" name="keyword" id="keyword-search" value="{{ current_filters.get('keyword', '') }}" aria-label="Search applications by keyword"
+                       autocomplete="off" placeholder="Name, email, job title" 
+                       class="w-full form-input px-3 py-2.5 rounded-lg bg-gray-800 border-gray-700 focus:border-red-500 transition-colors">
+            </div>
+
+            <!-- Job Selection -->
+            <div class="space-y-2">
+                <label for="job-position-filter" class="block text-xs uppercase tracking-wide text-gray-400 font-semibold">
+                    <i class="fas fa-briefcase mr-1"></i>Job Position
+                </label>
+                <select name="job_id" id="job-position-filter" autocomplete="off" aria-label="Filter by job position" class="w-full form-input px-3 py-2.5 rounded-lg bg-gray-800 border-gray-700 focus:border-red-500 transition-colors text-white">
+                    <option value="" class="bg-gray-800 text-white">All job positions</option>
+                    {% for job in jobs %}
+                        <option value="{{ job.job_id }}" {% if current_filters.get('job_id') == job.job_id %}selected{% endif %} class="bg-gray-800 text-white">
+                            {{ job.title or job.job_title or 'Untitled Job' }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="space-y-2">
+                <label for="application-status-filter" class="block text-xs uppercase tracking-wide text-gray-400 font-semibold">
+                    <i class="fas fa-tasks mr-1"></i>Application Status
+                </label>
+                <select name="status" id="application-status-filter" autocomplete="off" aria-label="Filter by application status" class="w-full form-input px-3 py-2.5 rounded-lg bg-gray-800 border-gray-700 focus:border-red-500 transition-colors text-white">
+                    <option value="" class="bg-gray-800 text-white">All statuses</option>
+                    <option value="pending" {% if current_filters.get('status') == 'pending' %}selected{% endif %} class="bg-gray-800 text-white">Pending Review</option>
+                    <option value="scheduled" {% if current_filters.get('status') == 'scheduled' %}selected{% endif %} class="bg-gray-800 text-white">Scheduled</option>
+                    <option value="interviewed" {% if current_filters.get('status') == 'interviewed' %}selected{% endif %} class="bg-gray-800 text-white">Interviewed</option>
+                    <option value="hired" {% if current_filters.get('status') == 'hired' %}selected{% endif %} class="bg-gray-800 text-white">Hired</option>
+                    <option value="rejected" {% if current_filters.get('status') == 'rejected' %}selected{% endif %} class="bg-gray-800 text-white">Rejected</option>
+                </select>
+            </div>
+
+        </div>
+    </form>
+</section>
+
+<!-- Application List Section -->
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4">
+    {% if applications %}
+        <!-- Desktop Table View -->
+        <div class="table-container">
+            <table class="w-full text-sm min-w-[1000px]">
+                <thead>
+                    <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-800">
+                        <th class="py-3 text-left px-2">Applicant</th>
+                        <th class="py-3 text-left px-2 hidden lg:table-cell">Position</th>
+                        <th class="py-3 text-left px-2">Status</th>
+                        <th class="py-3 text-left px-2 hidden xl:table-cell">Submitted</th>
+                        <th class="py-3 text-left px-2 hidden lg:table-cell">Interview</th>
+                        <th class="py-3 text-left px-2">Resume</th>
+                        <th class="py-3 text-left px-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                    {% for app in applications %}
+                    <tr class="hover:bg-gray-800/50 transition-colors">
+                        <td class="py-4 px-2">
+                            <div>
+                                <p class="font-semibold text-white">{{ app.applicant_name }}</p>
+                                <p class="text-xs text-gray-500">{{ app.applicant_email }}</p>
+                            </div>
+                        </td>
+                        <td class="py-4 px-2 hidden lg:table-cell text-gray-300">{{ app.position_title or app.job_title or '' }}</td>
+                        <td class="py-4 px-2">
+                            {% set raw_status = (app.status or 'pending')|lower|trim %}
+                            {% set display_status = raw_status %}
+                            {# Note: withdrawn is already normalized to rejected in backend #}
+                            {% set status_cfg = {
+                                'pending': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30',
+                                'scheduled': 'bg-purple-600/20 text-purple-400 border-purple-600/30',
+                                'reviewed': 'bg-blue-600/20 text-blue-400 border-blue-600/30',
+                                'interviewed': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30',
+                                'accepted': 'bg-green-600/20 text-green-400 border-green-600/30',
+                                'rejected': 'bg-red-600/20 text-red-400 border-red-600/30',
+                                'applied': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30',
+                                'under_review': 'bg-blue-600/20 text-blue-400 border-blue-600/30',
+                                'interview': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30',
+                                'hired': 'bg-green-600/20 text-green-400 border-green-600/30'
+                            } %}
+                            {% set badge_class = status_cfg.get(display_status, 'bg-gray-600/20 text-gray-400 border-gray-600/30') %}
+                            <span class="px-2 py-1 rounded-full text-xs {{ badge_class }} border">
+                                {{ display_status|replace('_',' ')|title }}
+                            </span>
+                        </td>
+                        <td class="py-4 px-2 hidden xl:table-cell text-gray-400 text-xs">{{ app.submitted_at }}</td>
+                        <td class="py-4 px-2 hidden lg:table-cell">
+                            {% if app.has_interview %}
+                                <span class="px-2 py-1 rounded-full text-xs chip-accent">
+                                    <i class="fas fa-calendar-check mr-1"></i>{{ app.interview_date or 'Scheduled' }}
+                                </span>
+                            {% else %}
+                                <span class="text-xs text-gray-500">Not scheduled</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-2">
+                            {% if app.has_resume and app.resume_id %}
+                            <div class="flex items-center gap-1">
+                                {% set _docs_count = app.total_documents if (app.total_documents is defined and app.total_documents is not none) else count_uploaded_documents(applicant_id=app.applicant_id) %}
+                                {% if _docs_count|int > 0 %}
+                                <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold bg-gray-800/60 text-white rounded-full border border-gray-700 mr-2" title="Documents uploaded">{{ _docs_count }}</span>
+                                {% endif %}
+                                <a href="{{ url_for('admin_view_resume', resume_id=app.resume_id) }}" 
+                                   target="_blank"
+                                   class="px-2 py-1 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors" 
+                                   title="View Resume">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('admin_download_resume', resume_id=app.resume_id) }}" 
+                                   class="px-2 py-1 text-xs bg-green-600/20 text-green-300 hover:bg-green-600/30 rounded border border-green-600/30 transition-colors" 
+                                   title="Download Resume">
+                                    <i class="fas fa-download"></i>
+                                </a>
+                            </div>
+                            {% else %}
+                            <span class="text-xs text-gray-500 italic"></span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-2">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <!-- View Applicant details (opens applicant view which shows uploaded files) -->
+                                <div class="inline">
+                                    {# Map database statuses to simplified display statuses: pending, scheduled, interviewed, hired, rejected #}
+                                    {% set app_status = (app.status or 'pending')|lower|trim %}
+                                    {% set status_display_map = {
+                                        'pending': 'pending',
+                                        'scheduled': 'scheduled',
+                                        'interviewed': 'interviewed',
+                                        'hired': 'hired',
+                                        'rejected': 'rejected',
+                                    } %}
+                                    {% set display_status = status_display_map.get(app_status, 'pending') %}
+                                    
+                                    {# Status display configuration #}
+                                    {% set status_config = {
+                                        'pending': {'class': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'label': 'Pending'},
+                                        'scheduled': {'class': 'bg-purple-600/20 text-purple-400 border-purple-600/30', 'label': 'Scheduled'},
+                                        'interviewed': {'class': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30', 'label': 'Interviewed'},
+                                        'hired': {'class': 'bg-green-600/20 text-green-400 border-green-600/30', 'label': 'Hired'},
+                                        'rejected': {'class': 'bg-red-600/20 text-red-400 border-red-600/30', 'label': 'Rejected'}
+                                    } %}
+                                    {% set current_status = status_config.get(display_status, {'class': 'bg-gray-600/20 text-gray-400 border-gray-600/30', 'label': 'Pending'}) %}
+                                    {% set status_class = current_status.class %}
+                                    {% set status_label = current_status.label %}
+                                    
+                                    {# All statuses are now editable via dropdown #}
+                                        <form method="POST" action="{{ url_for('applications') }}" class="inline status-update-form" id="status-form-{{ app.application_id }}" data-application-id="{{ app.application_id }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="action" value="update_status">
+                                            <input type="hidden" name="application_id" value="{{ app.application_id }}">
+                                            <select name="status" 
+                                                    onchange="handleStatusChange(this, '{{ app.application_id }}', '{{ display_status }}')"
+                                                class="status-select px-3 py-2 rounded-full text-xs font-semibold border {{ status_class }} bg-gray-900 text-white focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none cursor-pointer hover:opacity-90 transition-opacity"
+                                                title="Click to change application status">
+                                                <option value="pending" {% if display_status == 'pending' %}selected{% endif %}>Pending</option>
+                                            <option value="scheduled" {% if display_status == 'scheduled' %}selected{% endif %}>Scheduled</option>
+                                            <option value="interviewed" {% if display_status == 'interviewed' %}selected{% endif %}>Interviewed</option>
+                                                <option value="hired" {% if display_status == 'hired' %}selected{% endif %}>Hired</option>
+                                                <option value="rejected" {% if display_status == 'rejected' %}selected{% endif %}>Rejected</option>
+                                            </select>
+                                        </form>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Mobile Card View -->
+        <div class="mobile-applications-list">
+            {% for app in applications %}
+            <div class="mobile-app-card">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1">
+                        <p class="font-semibold text-white text-sm mb-1">{{ app.applicant_name }}</p>
+                        <p class="text-xs text-gray-400 mb-1">{{ app.applicant_email }}</p>
+                        <p class="text-xs text-gray-500">{{ app.position_title or app.job_title or '' }}</p>
+                    </div>
+                    {% set raw_status_mobile = (app.status or 'pending')|lower|trim %}
+                    {% set display_status_mobile = raw_status_mobile %}
+                    {# Note: withdrawn is already normalized to rejected in backend #}
+                    {% set status_cfg = {
+                        'pending': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30',
+                        'scheduled': 'bg-purple-600/20 text-purple-400 border-purple-600/30',
+                        'reviewed': 'bg-blue-600/20 text-blue-400 border-blue-600/30',
+                        'interviewed': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30',
+                        'accepted': 'bg-green-600/20 text-green-400 border-green-600/30',
+                        'rejected': 'bg-red-600/20 text-red-400 border-red-600/30',
+                        'applied': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30',
+                        'under_review': 'bg-blue-600/20 text-blue-400 border-blue-600/30',
+                        'interview': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30',
+                        'hired': 'bg-green-600/20 text-green-400 border-green-600/30'
+                    } %}
+                    {% set badge_class = status_cfg.get(display_status_mobile, 'bg-gray-600/20 text-gray-400 border-gray-600/30') %}
+                    <span class="px-2 py-1 rounded-full text-xs {{ badge_class }} border ml-2">
+                        {{ display_status_mobile|replace('_',' ')|title }}
+                    </span>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-2 mb-3 text-xs">
+                    <div>
+                        <p class="text-gray-400">Submitted</p>
+                        <p class="text-gray-300">{{ app.submitted_at }}</p>
+                    </div>
+                    {% if app.has_interview %}
+                    <div>
+                        <p class="text-gray-400">Interview</p>
+                        <p class="text-cyan-400">{{ app.interview_date or 'Scheduled' }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="flex items-center justify-between pt-3 border-t border-gray-700">
+                    <div class="flex items-center gap-2">
+                        {% if app.has_resume and app.resume_id %}
+                        <a href="{{ url_for('admin_view_resume', resume_id=app.resume_id) }}" 
+                           target="_blank"
+                           class="px-2 py-1 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors" 
+                           title="View Resume">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        <a href="{{ url_for('admin_download_resume', resume_id=app.resume_id) }}" 
+                           class="px-2 py-1 text-xs bg-green-600/20 text-green-300 hover:bg-green-600/30 rounded border border-green-600/30 transition-colors" 
+                           title="Download Resume">
+                            <i class="fas fa-download"></i>
+                        </a>
+                        {% else %}
+                        <span class="text-xs text-gray-500 italic"></span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center">
+                        {% set app_status = (app.status or 'pending')|lower|trim %}
+                        {% set status_display_map = {
+                            'pending': 'pending',
+                            'scheduled': 'scheduled',
+                            'interviewed': 'interviewed',
+                            'hired': 'hired',
+                            'rejected': 'rejected',
+                        } %}
+                        {% set display_status = status_display_map.get(app_status, 'pending') %}
+                        
+                        {% set status_config = {
+                            'pending': {'class': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', 'label': 'Pending'},
+                            'scheduled': {'class': 'bg-purple-600/20 text-purple-400 border-purple-600/30', 'label': 'Scheduled'},
+                            'interviewed': {'class': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30', 'label': 'Interviewed'},
+                            'hired': {'class': 'bg-green-600/20 text-green-400 border-green-600/30', 'label': 'Hired'},
+                            'rejected': {'class': 'bg-red-600/20 text-red-400 border-red-600/30', 'label': 'Rejected'}
+                        } %}
+                        {% set current_status = status_config.get(display_status, {'class': 'bg-gray-600/20 text-gray-400 border-gray-600/30', 'label': 'Pending'}) %}
+                        {% set status_class = current_status.class %}
+                        {% set status_label = current_status.label %}
+                        
+                        {# All statuses are now editable via dropdown #}
+                            <form method="POST" action="{{ url_for('applications') }}" class="inline status-update-form" data-application-id="{{ app.application_id }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="update_status">
+                                <input type="hidden" name="application_id" value="{{ app.application_id }}">
+                                <select name="status" 
+                                        onchange="handleStatusChange(this, '{{ app.application_id }}', '{{ display_status }}')"
+                                    class="status-select px-3 py-2 rounded-full text-xs font-semibold border {{ status_class }} bg-gray-900 text-white focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none cursor-pointer hover:opacity-90 transition-opacity"
+                                    title="Click to change status">
+                                    <option value="pending" {% if display_status == 'pending' %}selected{% endif %}>Pending</option>
+                                <option value="scheduled" {% if display_status == 'scheduled' %}selected{% endif %}>Scheduled</option>
+                                <option value="interviewed" {% if display_status == 'interviewed' %}selected{% endif %}>Interviewed</option>
+                                    <option value="hired" {% if display_status == 'hired' %}selected{% endif %}>Hired</option>
+                                    <option value="rejected" {% if display_status == 'rejected' %}selected{% endif %}>Rejected</option>
+                                </select>
+                            </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+    <div class="card rounded-2xl bg-gray-900/80 p-10 text-center text-gray-400">
+        <i class="fas fa-file-alt text-4xl mb-3 text-gray-600"></i>
+        <p class="text-lg font-semibold mb-2">No applications found</p>
+        <p class="text-sm">No applications match your filters for your branch.</p>
+    </div>
+    {% endif %}
+</section>
+
+<!-- Statistics Modals -->
+<div id="totalModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fas fa-chart-bar text-red-400"></i>
+                Total Applications Overview
+            </h3>
+            <button class="modal-close" onclick="window.closeModal('totalModal')" title="Close modal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="space-y-4">
+            <div class="bg-gray-800 rounded-lg p-4">
+                <p class="text-3xl font-bold text-white text-center mb-2" id="total-count">{{ analytics.total or 0 }}</p>
+                <p class="text-gray-400 text-center text-sm">Total applications received</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+                <div class="bg-gray-800/50 rounded p-3">
+                    <p class="text-gray-400">This Month</p>
+                    <p class="text-white font-semibold" id="this-month">{{ analytics.this_month or 0 }}</p>
+                </div>
+                <div class="bg-gray-800/50 rounded p-3">
+                    <p class="text-gray-400">This Week</p>
+                    <p class="text-white font-semibold" id="this-week">{{ analytics.this_week or 0 }}</p>
+                </div>
+            </div>
+            <div id="total-applications-list" class="max-h-96 overflow-y-auto space-y-2 mt-4">
+                <!-- Applications list will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="pendingModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fas fa-clock text-yellow-400"></i>
+                Pending Applications
+            </h3>
+            <button class="modal-close" onclick="window.closeModal('pendingModal')" title="Close modal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="space-y-4">
+            <div class="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-4">
+                <p class="text-3xl font-bold text-yellow-400 text-center mb-2" id="pending-count">{{ analytics.pending or 0 }}</p>
+                <p class="text-yellow-600/70 text-center text-sm">Applications awaiting initial review</p>
+            </div>
+            <div id="pending-applications-list" class="max-h-96 overflow-y-auto space-y-2 mt-4">
+                <!-- Applications list will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add similar modals for other statuses -->
+<div id="hiredModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fas fa-check-circle text-green-400"></i>
+                Hired Applications
+            </h3>
+            <button class="modal-close" onclick="window.closeModal('hiredModal')" title="Close modal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="space-y-4">
+            <div class="bg-green-900/20 border border-green-600/30 rounded-lg p-4">
+                <p class="text-3xl font-bold text-green-400 text-center mb-2" id="hired-count">{{ analytics.hired or 0 }}</p>
+                <p class="text-green-600/70 text-center text-sm">Candidates successfully hired</p>
+            </div>
+            <div id="hired-applications-list" class="max-h-96 overflow-y-auto space-y-2 mt-4">
+                <!-- Applications list will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="rejectedModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fas fa-times-circle text-red-400"></i>
+                Rejected Applications
+            </h3>
+            <button class="modal-close" onclick="window.closeModal('rejectedModal')" title="Close modal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="space-y-4">
+            <div class="bg-red-900/20 border border-red-600/30 rounded-lg p-4">
+                <p class="text-3xl font-bold text-red-400 text-center mb-2" id="rejected-count">{{ analytics.rejected or 0 }}</p>
+                <p class="text-red-600/70 text-center text-sm">Applications not proceeding</p>
+            </div>
+            <div id="rejected-applications-list" class="max-h-96 overflow-y-auto space-y-2 mt-4">
+                <!-- Applications list will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="scheduledModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fas fa-calendar-check text-purple-400"></i>
+                Scheduled Applications
+            </h3>
+            <button class="modal-close" onclick="window.closeModal('scheduledModal')" title="Close modal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="space-y-4">
+            <div class="bg-purple-900/20 border border-purple-600/30 rounded-lg p-4">
+                <p class="text-3xl font-bold text-purple-400 text-center mb-2" id="scheduled-count">{{ analytics.scheduled or analytics.scheduled_applications or 0 }}</p>
+                <p class="text-purple-600/70 text-center text-sm">Interviews scheduled</p>
+            </div>
+            <div id="scheduled-applications-list" class="max-h-96 overflow-y-auto space-y-2 mt-4">
+                <!-- Applications list will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="interviewedModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fas fa-user-check text-cyan-400"></i>
+                Interviewed Applications
+            </h3>
+            <button class="modal-close" onclick="window.closeModal('interviewedModal')" title="Close modal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="space-y-4">
+            <div class="bg-cyan-900/20 border border-cyan-600/30 rounded-lg p-4">
+                <p class="text-3xl font-bold text-cyan-400 text-center mb-2" id="interviewed-count">{{ analytics.interviewed or 0 }}</p>
+                <p class="text-cyan-600/70 text-center text-sm">Interviewed candidates</p>
+            </div>
+            <div id="interviewed-applications-list" class="max-h-96 overflow-y-auto space-y-2 mt-4">
+                <!-- Applications list will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Removed shortlisted modal per request -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Modal functions
+    // Make all functions globally accessible
+    window.openModal = function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        
+        // Load data for the modal
+        loadModalData(modalId);
+    }
+    
+    // Load data for modals from backend
+    async function loadModalData(modalId) {
+        const modalType = modalId.replace('Modal', '').toLowerCase();
+        const url = new URL(window.location.href);
+        url.searchParams.set('format', 'json');
+        url.searchParams.set('modal', modalType);
+        
+        try {
+            const response = await fetch(url.toString(), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load modal data');
+            }
+            
+            const data = await response.json();
+            const applications = data.applications || [];
+            const analytics = data.analytics || {};
+            
+            // Update modal content based on type
+            if (modalType === 'total') {
+                updateTotalModal(applications, analytics);
+            } else if (modalType === 'pending') {
+                updatePendingModal(applications, analytics);
+            } else if (modalType === 'hired') {
+                updateHiredModal(applications, analytics);
+            } else if (modalType === 'rejected') {
+                updateRejectedModal(applications, analytics);
+            } else if (modalType === 'scheduled') {
+                updateScheduledModal(applications, analytics);
+            } else if (modalType === 'interviewed') {
+                updateInterviewedModal(applications, analytics);
+            }
+        } catch (error) {
+            console.error('Error loading modal data:', error);
+            const listContainer = document.getElementById(`${modalType}-applications-list`);
+            if (listContainer) {
+                listContainer.innerHTML = '<p class="text-red-400 text-sm text-center py-4">Failed to load applications. Please try again.</p>';
+            }
+        }
+    }
+    
+    // Update total modal
+    function updateTotalModal(applications, analytics) {
+        const countEl = document.getElementById('total-count');
+        const monthEl = document.getElementById('this-month');
+        const weekEl = document.getElementById('this-week');
+        const listEl = document.getElementById('total-applications-list');
+        
+        if (countEl) countEl.textContent = analytics.total || applications.length || 0;
+        if (monthEl) monthEl.textContent = analytics.this_month || 0;
+        if (weekEl) weekEl.textContent = analytics.this_week || 0;
+        
+        if (listEl) {
+            if (applications.length === 0) {
+                listEl.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No applications found.</p>';
+            } else {
+                listEl.innerHTML = applications.map(app => `
+                    <div class="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-semibold text-white text-sm">${app.applicant_name || 'Unknown'}</p>
+                                <p class="text-xs text-gray-400">${app.job_title || 'No job title'}</p>
+                                <p class="text-xs text-gray-500 mt-1">Submitted: ${app.submitted_at || 'N/A'}</p>
+                            </div>
+                            <span class="px-2 py-1 rounded-full text-xs ${getStatusBadgeClass(app.status)}">
+                                ${(app.status || 'pending').replace('_', ' ').toUpperCase()}
+                            </span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    }
+    
+    // Update pending modal
+    function updatePendingModal(applications, analytics) {
+        const countEl = document.getElementById('pending-count');
+        const listEl = document.getElementById('pending-applications-list');
+        
+        if (countEl) countEl.textContent = analytics.pending || applications.length || 0;
+        
+        if (listEl) {
+            if (applications.length === 0) {
+                listEl.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No pending applications.</p>';
+            } else {
+                listEl.innerHTML = applications.map(app => `
+                    <div class="bg-gray-800/50 rounded-lg p-3 border border-yellow-600/30">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-semibold text-white text-sm">${app.applicant_name || 'Unknown'}</p>
+                                <p class="text-xs text-gray-400">${app.job_title || 'No job title'}</p>
+                                <p class="text-xs text-gray-500 mt-1">Submitted: ${app.submitted_at || 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    }
+    
+    // Update hired modal
+    function updateHiredModal(applications, analytics) {
+        const countEl = document.getElementById('hired-count');
+        const listEl = document.getElementById('hired-applications-list');
+        
+        if (countEl) countEl.textContent = analytics.hired || applications.length || 0;
+        
+        if (listEl) {
+            if (applications.length === 0) {
+                listEl.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No hired applications.</p>';
+            } else {
+                listEl.innerHTML = applications.map(app => `
+                    <div class="bg-gray-800/50 rounded-lg p-3 border border-green-600/30">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-semibold text-white text-sm">${app.applicant_name || 'Unknown'}</p>
+                                <p class="text-xs text-gray-400">${app.job_title || 'No job title'}</p>
+                                <p class="text-xs text-gray-500 mt-1">Submitted: ${app.submitted_at || 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    }
+    
+    // Update rejected modal
+    function updateRejectedModal(applications, analytics) {
+        const countEl = document.getElementById('rejected-count');
+        const listEl = document.getElementById('rejected-applications-list');
+        
+        if (countEl) countEl.textContent = analytics.rejected || applications.length || 0;
+        
+        if (listEl) {
+            if (applications.length === 0) {
+                listEl.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No rejected applications.</p>';
+            } else {
+                listEl.innerHTML = applications.map(app => `
+                    <div class="bg-gray-800/50 rounded-lg p-3 border border-red-600/30">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-semibold text-white text-sm">${app.applicant_name || 'Unknown'}</p>
+                                <p class="text-xs text-gray-400">${app.job_title || 'No job title'}</p>
+                                <p class="text-xs text-gray-500 mt-1">Submitted: ${app.submitted_at || 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    }
+    
+    // Update scheduled modal
+    function updateScheduledModal(applications, analytics) {
+        const countEl = document.getElementById('scheduled-count');
+        const listEl = document.getElementById('scheduled-applications-list');
+        
+        if (countEl) countEl.textContent = analytics.scheduled || analytics.scheduled_applications || applications.length || 0;
+        
+        if (listEl) {
+            if (applications.length === 0) {
+                listEl.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No scheduled applications found.</p>';
+            } else {
+                listEl.innerHTML = applications.map(app => {
+                    const status = (app.status || 'scheduled').toLowerCase();
+                    const statusBadge = getStatusBadgeClass(status);
+                    const resumeViewUrl = app.resume_id ? `/admin/resumes/${app.resume_id}/view` : null;
+                    const resumeDownloadUrl = app.resume_id ? `/admin/resumes/${app.resume_id}/download` : null;
+                    
+                    return `
+                        <div class="bg-gray-800/50 rounded-lg p-3 border border-purple-600/30 hover:bg-gray-800/70 transition-colors">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <p class="font-semibold text-white text-sm truncate">${escapeHtml(app.applicant_name || 'Unknown')}</p>
+                                        <span class="px-2 py-0.5 rounded-full text-xs ${statusBadge} flex-shrink-0">
+                                            ${(status || 'scheduled').replace('_', ' ').toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mb-1 truncate">${escapeHtml(app.position_title || app.job_title || 'No job title')}</p>
+                                    <p class="text-xs text-gray-500 mb-1">${escapeHtml(app.applicant_email || 'N/A')}</p>
+                                    <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
+                                        <div>
+                                            <span class="text-gray-500">Interview Date:</span>
+                                            <span class="text-purple-400 ml-1">${app.interview_date || app.interview_scheduled_date || 'Not set'}</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-500">Submitted:</span>
+                                            <span class="text-gray-400 ml-1">${app.submitted_at || 'N/A'}</span>
+                                        </div>
+                                        ${app.interview_mode ? `
+                                        <div>
+                                            <span class="text-gray-500">Mode:</span>
+                                            <span class="text-gray-400 ml-1">${escapeHtml(app.interview_mode)}</span>
+                                        </div>
+                                        ` : ''}
+                                        ${app.interview_location ? `
+                                        <div>
+                                            <span class="text-gray-500">Location:</span>
+                                            <span class="text-gray-400 ml-1">${escapeHtml(app.interview_location)}</span>
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-2 flex-shrink-0">
+                                    ${resumeViewUrl ? `
+                                        <a href="${resumeViewUrl}" target="_blank" 
+                                           class="px-3 py-1.5 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors text-center" 
+                                           title="View Resume">
+                                            <i class="fas fa-eye mr-1"></i>View
+                                        </a>
+                                    ` : ''}
+                                    ${resumeDownloadUrl ? `
+                                        <a href="${resumeDownloadUrl}" 
+                                           class="px-3 py-1.5 text-xs bg-green-600/20 text-green-300 hover:bg-green-600/30 rounded border border-green-600/30 transition-colors text-center" 
+                                           title="Download Resume">
+                                            <i class="fas fa-download mr-1"></i>Download
+                                        </a>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+    }
+    
+    // Update interviewed modal
+    function updateInterviewedModal(applications, analytics) {
+        const countEl = document.getElementById('interviewed-count');
+        const listEl = document.getElementById('interviewed-applications-list');
+        
+        if (countEl) countEl.textContent = analytics.interviewed || applications.length || 0;
+        
+        if (listEl) {
+            if (applications.length === 0) {
+                listEl.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No interviewed applications found.</p>';
+            } else {
+                listEl.innerHTML = applications.map(app => {
+                    const status = (app.status || 'interviewed').toLowerCase();
+                    const statusBadge = getStatusBadgeClass(status);
+                    const resumeViewUrl = app.resume_id ? `/admin/resumes/${app.resume_id}/view` : null;
+                    const resumeDownloadUrl = app.resume_id ? `/admin/resumes/${app.resume_id}/download` : null;
+                    
+                    return `
+                        <div class="bg-gray-800/50 rounded-lg p-3 border border-cyan-600/30 hover:bg-gray-800/70 transition-colors">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <p class="font-semibold text-white text-sm truncate">${escapeHtml(app.applicant_name || 'Unknown')}</p>
+                                        <span class="px-2 py-0.5 rounded-full text-xs ${statusBadge} flex-shrink-0">
+                                            ${(status || 'interviewed').replace('_', ' ').toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mb-1 truncate">${escapeHtml(app.position_title || app.job_title || 'No job title')}</p>
+                                    <p class="text-xs text-gray-500 mb-1">${escapeHtml(app.applicant_email || 'N/A')}</p>
+                                    <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
+                                        <div>
+                                            <span class="text-gray-500">Interview:</span>
+                                            <span class="text-cyan-400 ml-1">${app.interview_date || 'Completed'}</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-500">Submitted:</span>
+                                            <span class="text-gray-400 ml-1">${app.submitted_at || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-2 flex-shrink-0">
+                                    ${resumeViewUrl ? `
+                                        <a href="${resumeViewUrl}" target="_blank" 
+                                           class="px-3 py-1.5 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors text-center" 
+                                           title="View Resume">
+                                            <i class="fas fa-eye mr-1"></i>View
+                                        </a>
+                                    ` : ''}
+                                    ${resumeDownloadUrl ? `
+                                        <a href="${resumeDownloadUrl}" 
+                                           class="px-3 py-1.5 text-xs bg-green-600/20 text-green-300 hover:bg-green-600/30 rounded border border-green-600/30 transition-colors text-center" 
+                                           title="Download Resume">
+                                            <i class="fas fa-download mr-1"></i>Download
+                                        </a>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+    }
+    
+    // Helper function to escape HTML
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Get status badge class
+    function getStatusBadgeClass(status) {
+        const statusMap = {
+            'pending': 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30',
+            'scheduled': 'bg-purple-600/20 text-purple-400 border-purple-600/30',
+            'interviewed': 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30',
+            'hired': 'bg-green-600/20 text-green-400 border-green-600/30',
+            'rejected': 'bg-red-600/20 text-red-400 border-red-600/30'
+        };
+        return statusMap[status] || 'bg-gray-600/20 text-gray-400 border-gray-600/30';
+    }
+
+    window.closeModal = function(modalId) {
+        const modal = document.getElementById(modalId);
+        modal.classList.remove('active');
+        document.body.style.overflow = 'auto';
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal-overlay')) {
+            e.target.classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modals = document.querySelectorAll('.modal-overlay');
+            modals.forEach(modal => {
+                modal.classList.remove('active');
+            });
+            document.body.style.overflow = 'auto';
+        }
+    });
+
+    // Add keyboard support for stat cards
+    document.querySelectorAll('.stat-card[role="button"]').forEach(card => {
+        card.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                const onclick = card.getAttribute('onclick');
+                if (onclick) {
+                    eval(onclick);
+                }
+            }
+        });
+    });
+
+    // Auto-submit filters
+    const filterForm = document.getElementById('applications-filter-form');
+    if (filterForm) {
+        const triggerSubmit = () => filterForm.requestSubmit();
+
+        filterForm.querySelectorAll('select').forEach(select => {
+            select.addEventListener('change', triggerSubmit);
+        });
+
+        const keywordInput = document.getElementById('keyword-search');
+        if (keywordInput) {
+            let keywordTimer = null;
+            keywordInput.addEventListener('input', function() {
+                if (keywordTimer) clearTimeout(keywordTimer);
+                keywordTimer = setTimeout(triggerSubmit, 400);
+            });
+            keywordInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (keywordTimer) clearTimeout(keywordTimer);
+                    triggerSubmit();
+                }
+            });
+        }
+    }
+
+    // Status configuration for visual updates
+    const statusConfig = {
+        'pending': { class: 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30', label: 'Pending' },
+        'scheduled': { class: 'bg-purple-600/20 text-purple-400 border-purple-600/30', label: 'Scheduled' },
+        'interviewed': { class: 'bg-cyan-600/20 text-cyan-400 border-cyan-600/30', label: 'Interviewed' },
+        'hired': { class: 'bg-green-600/20 text-green-400 border-green-600/30', label: 'Hired' },
+        'rejected': { class: 'bg-red-600/20 text-red-400 border-red-600/30', label: 'Rejected' }
+    };
+    
+    // Function to update analytics counters optimistically
+    function updateAnalyticsCounters(newStatus, oldStatus) {
+        // Update stat cards immediately for smooth UX
+        const statusMap = {
+            'pending': { card: document.querySelector('[onclick*="pendingModal"]'), count: '{{ analytics.pending or 0 }}' },
+            'scheduled': { card: null, count: null },
+            'interviewed': { card: document.querySelector('[onclick*="interviewedModal"]'), count: '{{ analytics.interviewed or 0 }}' },
+            'hired': { card: document.querySelector('[onclick*="hiredModal"]'), count: '{{ analytics.hired or 0 }}' },
+            'rejected': { card: document.querySelector('[onclick*="rejectedModal"]'), count: '{{ analytics.rejected or 0 }}' }
+        };
+        
+        // Decrement old status if it exists
+        if (oldStatus && statusMap[oldStatus] && statusMap[oldStatus].card) {
+            const oldCard = statusMap[oldStatus].card;
+            const oldCountEl = oldCard?.querySelector('.text-xl, .text-2xl');
+            if (oldCountEl) {
+                const currentCount = parseInt(oldCountEl.textContent) || 0;
+                if (currentCount > 0) {
+                    oldCountEl.textContent = currentCount - 1;
+                }
+            }
+        }
+        
+        // Increment new status if it exists
+        if (newStatus && statusMap[newStatus] && statusMap[newStatus].card) {
+            const newCard = statusMap[newStatus].card;
+            const newCountEl = newCard?.querySelector('.text-xl, .text-2xl');
+            if (newCountEl) {
+                const currentCount = parseInt(newCountEl.textContent) || 0;
+                newCountEl.textContent = currentCount + 1;
+            }
+        }
+    }
+    
+    // Function to update status visual appearance immediately
+    function updateStatusVisual(selectElement, newStatus) {
+        const config = statusConfig[newStatus] || statusConfig['pending'];
+        
+        // Get base classes that should be preserved
+        const baseClasses = [
+            'status-select', 'px-3', 'py-2', 'rounded-full', 'text-xs', 
+            'font-semibold', 'border', 'bg-gray-900', 'text-white', 
+            'focus:ring-2', 'focus:ring-red-500', 'focus:border-red-500', 
+            'outline-none', 'cursor-pointer', 'hover:opacity-90', 'transition-opacity'
+        ];
+        
+        // Remove old status color classes
+        const statusColorClasses = [
+            'bg-yellow-600/20', 'text-yellow-400', 'border-yellow-600/30',
+            'bg-purple-600/20', 'text-purple-400', 'border-purple-600/30',
+            'bg-cyan-600/20', 'text-cyan-400', 'border-cyan-600/30',
+            'bg-green-600/20', 'text-green-400', 'border-green-600/30',
+            'bg-red-600/20', 'text-red-400', 'border-red-600/30',
+            'bg-gray-600/20', 'text-gray-400', 'border-gray-600/30'
+        ];
+        
+        // Remove old status classes
+        statusColorClasses.forEach(cls => {
+            selectElement.classList.remove(cls);
+        });
+        
+        // Add new status classes
+        const newClasses = config.class.split(' ');
+        newClasses.forEach(cls => {
+            if (cls.trim()) {
+                selectElement.classList.add(cls.trim());
+            }
+        });
+    }
+
+    // Handle status change with automatic modal update
+    window.handleStatusChange = function(selectElement, applicationId, oldStatus) {
+        const newStatus = selectElement.value;
+        const form = selectElement.closest('form');
+        
+        // Validate select element and form
+        if (!selectElement || !form) {
+            console.error('Invalid select element or form');
+            showNotification('Error: Form not found. Please refresh the page.', 'error');
+            return;
+        }
+        
+        // Validate status is selected
+        if (!newStatus || newStatus.trim() === '') {
+            showNotification('Please select a valid status.', 'error');
+            selectElement.value = oldStatus;
+            return;
+        }
+        
+        // Don't show confirmation if status hasn't changed
+        if (newStatus === oldStatus) {
+            return;
+        }
+        
+        // Get status labels for better confirmation message
+        const statusLabels = {
+            'pending': 'Pending',
+            'scheduled': 'Scheduled',
+            'interviewed': 'Interviewed',
+            'hired': 'Hired',
+            'rejected': 'Rejected'
+        };
+        const statusLabel = statusLabels[newStatus] || newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+        
+        // Show confirmation with better message
+        const confirmMessage = `Are you sure you want to update the application status to "${statusLabel}"?\n\nThe applicant will be automatically notified via email and system notification.`;
+        
+        openConfirmWithCallback(function() {
+            // Optimistic UI update - update visual appearance immediately
+            updateStatusVisual(selectElement, newStatus);
+
+            // Ensure status field has value before submitting
+            const statusInput = form.querySelector('select[name="status"]');
+            if (!form || !statusInput) {
+                showNotification('Form or status field not found.', 'error');
+                selectElement.value = oldStatus;
+                updateStatusVisual(selectElement, oldStatus);
+                return;
+            }
+
+            // Ensure the select value is set (use newStatus from function parameter)
+            if (!newStatus || newStatus.trim() === '') {
+                showNotification('Please select a valid status.', 'error');
+                selectElement.value = oldStatus;
+                updateStatusVisual(selectElement, oldStatus);
+                return;
+            }
+            
+            // Show minimal loading state (smooth transition)
+            selectElement.style.opacity = '0.7';
+            selectElement.style.pointerEvents = 'none';
+            
+            // Submit form via AJAX for better UX
+            const formData = new FormData(form);
+            
+            // Explicitly ensure status is in FormData (disabled fields might not be included)
+            formData.set('status', newStatus);
+            formData.set('action', 'update_status');
+            
+            // Ensure application_id is set
+            const appIdInput = form.querySelector('input[name="application_id"]');
+            if (appIdInput && appIdInput.value) {
+                formData.set('application_id', appIdInput.value);
+            } else if (applicationId) {
+                // Fallback to function parameter
+                formData.set('application_id', applicationId);
+            } else {
+                showNotification('Error: Application ID not found.', 'error');
+                selectElement.disabled = false;
+                selectElement.classList.remove('status-updating');
+                selectElement.value = oldStatus;
+                updateStatusVisual(selectElement, oldStatus);
+                return;
+            }
+            
+            // Ensure CSRF token is included
+            const csrfInput = form.querySelector('input[name="csrf_token"]');
+            if (csrfInput && csrfInput.value) {
+                formData.set('csrf_token', csrfInput.value);
+            }
+            
+            // Debug: Log form data
+            console.log('Submitting status update:', {
+                application_id: formData.get('application_id'),
+                status: formData.get('status'),
+                action: formData.get('action'),
+                newStatus: newStatus,
+                has_csrf: !!formData.get('csrf_token')
+            });
+            
+            // Get form action URL properly - handle both string and object cases
+            let formActionUrl = form.getAttribute('action');
+            if (!formActionUrl || formActionUrl === '') {
+                // Try form.action as string
+                formActionUrl = typeof form.action === 'string' ? form.action : window.location.pathname;
+            }
+            // Fallback to current path if still not valid
+            if (!formActionUrl || formActionUrl.includes('[object')) {
+                formActionUrl = window.location.pathname;
+            }
+            
+            // Make AJAX request to update status
+            fetch(formActionUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            })
+                .then(async response => {
+                    // Log response for debugging
+                    console.log('Response status:', response.status);
+                    console.log('Response URL:', response.url);
+                    
+                    // Check content type
+                    const contentType = response.headers.get('content-type') || '';
+                    console.log('Content-Type:', contentType);
+                    
+                    // Check if response is OK
+                    if (!response.ok) {
+                        // Try to get error message from response
+                        let errorData = null;
+                        try {
+                            if (contentType.includes('application/json')) {
+                                errorData = await response.json();
+                            } else {
+                                const text = await response.text();
+                                console.error('Error response text:', text.substring(0, 200));
+                                // Try to parse as JSON even if content-type is wrong
+                                try {
+                                    errorData = JSON.parse(text);
+                                } catch {
+                                    errorData = { error: text.substring(0, 100) || `HTTP error! status: ${response.status}` };
+                                }
+                            }
+                        } catch (parseError) {
+                            console.error('Error parsing response:', parseError);
+                            errorData = { error: `HTTP error! status: ${response.status}` };
+                        }
+                        throw new Error(errorData?.error || errorData?.message || `HTTP error! status: ${response.status}`);
+                    }
+                    
+                    // Parse JSON response
+                    let data = null;
+                    try {
+                        if (contentType.includes('application/json')) {
+                            data = await response.json();
+                            console.log('Success response data:', data);
+                        } else {
+                            // Not JSON response but OK status - try to parse as JSON anyway
+                            const text = await response.text();
+                            console.log('Non-JSON response, attempting to parse:', text.substring(0, 100));
+                            try {
+                                data = JSON.parse(text);
+                            } catch {
+                                // If it's HTML (redirect), assume success and reload
+                                if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+                                    console.log('Received HTML redirect, assuming success');
+                                    data = { success: true, message: 'Status updated successfully. Reloading page...' };
+                                } else {
+                                    data = { success: true, message: 'Status updated successfully.' };
+                                }
+                            }
+                        }
+                    } catch (parseError) {
+                        console.error('JSON parse error:', parseError);
+                        // If JSON parsing fails but response is OK, assume success
+                        data = { success: true, message: 'Status updated successfully.' };
+                    }
+                    
+                    return data;
+                })
+                .then(data => {
+                    if (data && data.success) {
+                        // Success - restore element state immediately
+                        selectElement.style.opacity = '1';
+                        selectElement.style.pointerEvents = 'auto';
+                        selectElement.classList.remove('status-updating');
+                        
+                        // Ensure visual is updated
+                        updateStatusVisual(selectElement, newStatus);
+                        
+                        // Update analytics counters immediately (optimistic update)
+                        updateAnalyticsCounters(newStatus, oldStatus);
+                        
+                        // Show brief success notification
+                        const successMessage = data.message || `Status updated to "${statusLabel}" successfully!`;
+                        showNotification(successMessage, 'success');
+                        
+                        // Smooth reload after brief delay to update analytics
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 800);
+                    } else {
+                        throw new Error(data.error || data.message || 'Update failed - server returned unsuccessful response');
+                    }
+                })
+                .catch(error => {
+                    // Error - reset and show message
+                    selectElement.style.opacity = '1';
+                    selectElement.style.pointerEvents = 'auto';
+                    selectElement.classList.remove('status-updating');
+                    selectElement.value = oldStatus;
+                    
+                    // Restore old visual appearance
+                    updateStatusVisual(selectElement, oldStatus);
+                    
+                    const errorMessage = error.message || 'Failed to update status. Please try again.';
+                    showNotification(errorMessage, 'error');
+                    console.error('Status update error:', error);
+                    console.error('Error stack:', error.stack);
+                });
+                })
+            }, confirmMessage);
+    };
+    
+    // Notification helper function
+    function showNotification(message, type) {
+        // Remove existing notifications
+        const existing = document.querySelectorAll('.status-notification');
+        existing.forEach(n => n.remove());
+        
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `status-notification fixed top-4 right-4 z-50 px-6 py-4 rounded-2xl text-white text-sm font-semibold shadow-2xl transition-all transform translate-x-0 ${
+            type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'
+        }`;
+        notification.innerHTML = `
+            <div class="flex items-center gap-3">
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+            notification.style.opacity = '1';
+        }, 10);
+        
+        // Remove after 4 seconds
+        setTimeout(() => {
+            notification.style.transform = 'translateX(400px)';
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                notification.remove();
+            }, 300);
+        }, 4000);
+    }
+
+    // Auto-refresh page after status update to update modals
+    // Check if we're coming back from a status update
+    const urlParams = new URLSearchParams(window.location.search);
+    const statusUpdated = sessionStorage.getItem('statusUpdated');
+    
+    if (statusUpdated === 'true') {
+        // Clear the flag
+        sessionStorage.removeItem('statusUpdated');
+        
+        // Close any open modals
+        document.querySelectorAll('.modal-overlay.active').forEach(modal => {
+            modal.classList.remove('active');
+        });
+        
+        // The page will reload with updated analytics, so modals will show correct counts
+    }
+
+    // Track status form submissions
+    document.querySelectorAll('.status-update-form').forEach(form => {
+        form.addEventListener('submit', function() {
+            sessionStorage.setItem('statusUpdated', 'true');
+        });
+    });
+</script>
+{% endblock %}

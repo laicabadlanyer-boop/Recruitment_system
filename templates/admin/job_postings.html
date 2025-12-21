@@ -1,0 +1,1058 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}Job Postings • J&T Express{% endblock %}
+
+{% set current_filters = current_filters or {} %}
+{% set user = user or {} %}
+
+{% block extra_css %}
+<style>
+    .sidebar-item.active { border-color: #dc2626; background: rgba(220,38,38,.12); }
+    .status-badge { border: 1px solid transparent; transition: all 0.2s ease; }
+    .action-btn { transition: all 0.2s ease; }
+    .action-btn:hover { transform: scale(1.1); }
+    
+    /* Smooth Filtering Animations */
+    .filter-section {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .filter-input {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .filter-input:focus {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+    }
+    
+    .filter-input:focus-within {
+        border-color: #dc2626;
+    }
+    
+    /* Loading Overlay */
+    .filter-loading {
+        position: relative;
+    }
+    
+    .filter-loading::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(17, 24, 39, 0.7);
+        backdrop-filter: blur(2px);
+        z-index: 10;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+    }
+    
+    .filter-loading.active::after {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    
+    /* Ensure action buttons are always clickable */
+    .action-btn {
+        position: relative;
+        z-index: 1;
+        pointer-events: auto !important;
+    }
+    
+    .action-btn i {
+        pointer-events: none;
+    }
+    
+    /* Loading Spinner */
+    .filter-spinner {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1000;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    
+    .filter-spinner.active {
+        opacity: 1;
+    }
+    
+    .filter-spinner .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(220, 38, 38, 0.2);
+        border-top-color: #dc2626;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    /* Table Row Animations */
+    .table-row {
+        animation: fadeInRow 0.3s ease-out;
+        animation-fill-mode: both;
+    }
+    
+    @keyframes fadeInRow {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    /* Stagger animation for rows */
+    .table-row:nth-child(1) { animation-delay: 0.05s; }
+    .table-row:nth-child(2) { animation-delay: 0.1s; }
+    .table-row:nth-child(3) { animation-delay: 0.15s; }
+    .table-row:nth-child(4) { animation-delay: 0.2s; }
+    .table-row:nth-child(5) { animation-delay: 0.25s; }
+    .table-row:nth-child(n+6) { animation-delay: 0.3s; }
+    
+    /* Filter Active Indicator */
+    .filter-active {
+        position: relative;
+    }
+    
+    .filter-active::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 8px;
+        height: 8px;
+        background: #dc2626;
+        border-radius: 50%;
+        box-shadow: 0 0 8px rgba(220, 38, 38, 0.6);
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(1.1); }
+    }
+    
+    /* Smooth form transitions */
+    #search-form {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    /* Input focus effects */
+    .form-input:focus {
+        outline: none;
+        border-color: #dc2626;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+    }
+    
+    /* Select dropdown smooth transitions */
+    select.form-input {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    select.form-input:hover {
+        border-color: rgba(220, 38, 38, 0.5);
+    }
+    
+    /* Results count animation */
+    .results-count {
+        transition: all 0.3s ease;
+    }
+    
+    .results-count.updating {
+        opacity: 0.5;
+        transform: scale(0.95);
+    }
+    
+    /* Active Filter Chips */
+    .filter-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+        min-height: 2rem;
+        align-items: center;
+    }
+    
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.75rem;
+        background: rgba(220, 38, 38, 0.15);
+        border: 1px solid rgba(220, 38, 38, 0.3);
+        border-radius: 0.5rem;
+        font-size: 0.75rem;
+        color: #fca5a5;
+        animation: slideInChip 0.3s ease-out;
+        transition: all 0.2s ease;
+    }
+    
+    .filter-chip:hover {
+        background: rgba(220, 38, 38, 0.25);
+        border-color: rgba(220, 38, 38, 0.5);
+        transform: translateY(-1px);
+    }
+    
+    .filter-chip .chip-label {
+        font-weight: 500;
+        color: #fca5a5;
+    }
+    
+    .filter-chip .chip-value {
+        color: #fff;
+        font-weight: 600;
+    }
+    
+    .filter-chip .chip-close {
+        cursor: pointer;
+        padding: 0.125rem;
+        border-radius: 0.25rem;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+    
+    .filter-chip .chip-close:hover {
+        background: rgba(220, 38, 38, 0.3);
+        transform: scale(1.1);
+    }
+    
+    @keyframes slideInChip {
+        from {
+            opacity: 0;
+            transform: translateX(-10px) scale(0.9);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+        }
+    }
+    
+    .clear-all-filters {
+        padding: 0.375rem 0.75rem;
+        background: rgba(107, 114, 128, 0.15);
+        border: 1px solid rgba(107, 114, 128, 0.3);
+        border-radius: 0.5rem;
+        font-size: 0.75rem;
+        color: #9ca3af;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+    
+    .clear-all-filters:hover {
+        background: rgba(107, 114, 128, 0.25);
+        border-color: rgba(107, 114, 128, 0.5);
+        color: #fff;
+        transform: translateY(-1px);
+    }
+    
+    /* Filter Count Badge */
+    .filter-count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.25rem;
+        height: 1.25rem;
+        padding: 0 0.375rem;
+        background: #dc2626;
+        color: #fff;
+        border-radius: 0.75rem;
+        font-size: 0.625rem;
+        font-weight: 700;
+        margin-left: 0.375rem;
+        animation: popIn 0.3s ease-out;
+    }
+    
+    @keyframes popIn {
+        from {
+            opacity: 0;
+            transform: scale(0);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+    
+    /* Sort Dropdown */
+    .sort-control {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    /* Enhanced Empty State */
+    .filter-empty-state {
+        padding: 3rem 1.5rem;
+        text-align: center;
+        background: rgba(31, 41, 55, 0.5);
+        border: 2px dashed rgba(107, 114, 128, 0.3);
+        border-radius: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .filter-empty-state i {
+        font-size: 3rem;
+        color: rgba(107, 114, 128, 0.5);
+        margin-bottom: 1rem;
+    }
+    
+    .filter-empty-state h3 {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #d1d5db;
+        margin-bottom: 0.5rem;
+    }
+    
+    .filter-empty-state p {
+        font-size: 0.875rem;
+        color: #9ca3af;
+        margin-bottom: 1rem;
+    }
+    
+    /* Filter Summary */
+    .filter-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        background: rgba(31, 41, 55, 0.5);
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(107, 114, 128, 0.2);
+    }
+    
+    /* Enhanced Input Focus */
+    .filter-input input:focus,
+    .filter-input select:focus {
+        border-color: #dc2626;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        transform: translateY(-1px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="card rounded-xl bg-gradient-to-r from-gray-900 via-gray-900 to-black p-3 sm:p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2 sm:gap-3">
+    <div class="min-w-0 flex-1">
+        <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2">Job Vacancies</h1>
+        <p class="text-gray-400 text-xs sm:text-sm md:text-base">{% if user.role == 'admin' %}View all job postings posted by HR across all branches.{% else %}Create, manage, and track all job postings across branches.{% endif %}</p>
+        <p class="text-xs sm:text-sm text-gray-500 mt-2">Total jobs: <span class="font-semibold text-white">{{ jobs|length }}</span></p>
+    </div>
+    {% if user.role != 'admin' %}
+    <button onclick="window.openAddModal()" class="btn-primary px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg whitespace-nowrap">
+        <i class="fas fa-plus"></i>
+        <span class="hidden sm:inline">Post New Job</span>
+        <span class="sm:hidden">New Job</span>
+    </button>
+    {% endif %}
+</header>
+
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4 filter-section">
+    <div class="flex flex-col md:flex-row gap-2 sm:gap-3 mb-3 sm:mb-4">
+        <div class="relative flex-1">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none z-10"></i>
+            <label for="keyword-filter" class="sr-only">Search job titles</label>
+            <input 
+                type="text" 
+                id="keyword-filter" 
+                name="keyword" 
+                autocomplete="off" 
+                placeholder="Search job titles..." 
+                aria-label="Search job titles by keyword" 
+                value="{{ current_filters.get('keyword', '') if current_filters else '' }}" 
+                class="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none placeholder-gray-500"
+            >
+        </div>
+        {% if branches %}
+        <div>
+          <label for="branch-filter" class="sr-only">Filter by branch</label>
+          <select 
+              id="branch-filter" 
+              name="branch_id" 
+              autocomplete="organization" 
+              class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-4 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+          >
+            <option value="">All Branches</option>
+            {% for branch in branches %}
+                {% set branch_id_val = branch.branch_id if branch.branch_id is number else branch.branch_id|int %}
+                {% set filter_branch_id = current_filters.get('branch_id') if current_filters else None %}
+                {% set filter_branch_id_val = filter_branch_id|int if filter_branch_id else None %}
+                <option value="{{ branch_id_val }}" {% if filter_branch_id_val == branch_id_val %}selected{% endif %}>{{ branch.branch_name }}</option>
+            {% endfor %}
+        </select>
+        </div>
+        {% endif %}
+        {% if positions %}
+        <div>
+          <label for="position-filter" class="sr-only">Filter by job position</label>
+          <select 
+              id="position-filter" 
+              name="position_id" 
+              autocomplete="off" 
+              class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-4 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+          >
+              <option value="">All Positions</option>
+              {% for position in positions %}
+                  {% set position_id_val = position.position_id if position.position_id is number else position.position_id|int %}
+                  {% set filter_position_id = current_filters.get('position_id') if current_filters else None %}
+                  {% set filter_position_id_val = filter_position_id|int if filter_position_id else None %}
+                  <option value="{{ position_id_val }}" {% if filter_position_id_val == position_id_val %}selected{% endif %}>{{ position.title or position.position_name or 'Untitled Job Position' }}</option>
+              {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <div>
+          <label for="status-filter" class="sr-only">Filter by status</label>
+          <select 
+              id="status-filter" 
+              name="status" 
+              autocomplete="off" 
+              class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-4 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+          >
+            <option value="">All Status</option>
+            {% set current_status = (current_filters.get('status') or '')|lower if current_filters else '' %}
+              <option value="active" {% if current_status == 'active' %}selected{% endif %}>Active</option>
+              <option value="closed" {% if current_status == 'closed' %}selected{% endif %}>Closed</option>
+          </select>
+        </div>
+    </div>
+
+    {% if jobs %}
+
+    <div class="table-container filter-loading" id="table-container">
+        <table class="w-full text-sm min-w-[900px]">
+            <thead>
+                <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-800">
+                    <th class="py-3 text-left px-2">Job Position</th>
+                    <th class="py-3 text-left px-2 hidden md:table-cell">Branch</th>
+                    <th class="py-3 text-left px-2 hidden xl:table-cell">Posted By</th>
+                    <th class="py-3 text-left px-2 hidden md:table-cell">Applications</th>
+                    <th class="py-3 text-left px-2">Status</th>
+                    <th class="py-3 text-left px-2">Posted</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800" id="jobs-table-body">
+                {% for job in jobs %}
+                {% set job_status = job.status or 'draft' %}
+                {% set status_display = 'active' if job_status in ['active', 'published', 'open'] else job_status %}
+                <tr class="table-row hover:bg-gray-800/50 transition-all duration-200 cursor-pointer" onclick="openJobDetailsModal({{ job.job_id }})">
+                    <td class="py-4 px-2">
+                        <div>
+                            <p class="font-semibold text-white">{{ job.title }}</p>
+                            <p class="text-xs text-gray-400 md:hidden">{{ job.branch_name or 'All Branches' }}</p>
+                        </div>
+                    </td>
+                    <td class="py-4 px-2 hidden md:table-cell text-gray-300">{{ job.branch_name or 'All Branches' }}</td>
+                    <td class="py-4 px-2 hidden xl:table-cell text-gray-400 text-xs">{{ job.posted_by_name or job.created_by_name or 'System' }}</td>
+                    <td class="py-4 px-2 hidden md:table-cell">
+                        <span class="px-2 py-1 rounded-full bg-blue-600/20 text-blue-400 text-xs">{{ job.application_count }} app</span>
+                    </td>
+                    <td class="py-4 px-2">
+                        <span class="status-badge px-2.5 py-1 rounded-full text-xs font-semibold {{
+                            'bg-green-600/20 text-green-400 border-green-600/30' if status_display == 'active' else 'bg-gray-600/20 text-gray-400 border-gray-600/30'
+                        }}">
+                            {{ status_display|title }}
+                        </span>
+                    </td>
+                    <td class="py-4 px-2 text-gray-400 text-xs">
+                        {% if job.posted_at or job.created_at %}
+                            {{ (job.posted_at or job.created_at)|format_human_datetime }}
+                        {% else %}
+                            
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="rounded-xl border border-dashed border-gray-700 bg-gray-900/40 p-10 text-center text-gray-400">
+        <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
+            <i class="fas fa-briefcase text-3xl text-gray-600"></i>
+        </div>
+        {% set has_active_filters = current_filters and (current_filters.get('keyword') or current_filters.get('branch_id') or current_filters.get('position_id') or current_filters.get('status')) %}
+        {% if has_active_filters %}
+        <h3 class="text-lg font-semibold mb-2 text-gray-300">No results match your filters</h3>
+        <p class="text-sm mb-6 text-gray-500">Try adjusting your search criteria.</p>
+        {% else %}
+        <h3 class="text-lg font-semibold mb-2 text-gray-300">No job postings found</h3>
+        <p class="text-sm mb-6 text-gray-500">Create your first job posting to start recruiting.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+
+<!-- Job Details Modal -->
+<div id="job-details-modal" class="modal-overlay hidden">
+    <div class="modal-content max-w-4xl">
+        <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+            <h3 class="text-lg sm:text-xl font-bold" id="job-details-title">Job Details</h3>
+            <button onclick="closeModal('job-details-modal')" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+        <div class="p-4 sm:p-6 space-y-4" id="job-details-content">
+            <!-- Job details will be loaded here -->
+            <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-3xl text-gray-400 mb-2"></i>
+                <p class="text-gray-400">Loading job details...</p>
+            </div>
+        </div>
+        <div class="p-4 sm:p-6 border-t border-gray-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 sticky bottom-0 bg-gray-900/95 backdrop-blur-md">
+            <button type="button" onclick="closeModal('job-details-modal')" class="px-4 py-2.5 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium order-2 sm:order-1">Cancel</button>
+            <button type="button" onclick="editJobFromDetails()" class="btn-primary px-6 py-2.5 rounded-lg font-semibold text-sm shadow-lg order-1 sm:order-2" id="update-job-btn">Update Job</button>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- Loading Spinner -->
+<div class="filter-spinner" id="filter-spinner">
+    <div class="spinner"></div>
+</div>
+
+<script>
+    // Define functions globally BEFORE DOMContentLoaded to ensure they're available
+    window.openAddModal = function() {
+        const form = document.getElementById('job-form');
+        if (!form) {
+            return;
+        }
+        
+        // Preserve CSRF token when resetting form
+        const csrfToken = form.querySelector('input[name="csrf_token"]');
+        const csrfTokenValue = csrfToken ? csrfToken.value : '';
+        
+        form.reset();
+        
+        // Restore CSRF token after reset
+        if (csrfToken && csrfTokenValue) {
+            csrfToken.value = csrfTokenValue;
+        } else if (!csrfToken) {
+            // Add CSRF token if missing
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = '{{ csrf_token() }}';
+            form.insertBefore(csrfInput, form.firstChild);
+        }
+        
+        const jobIdField = document.getElementById('job-id');
+        if (jobIdField) jobIdField.value = '';
+        
+        const modalTitle = document.getElementById('modal-title');
+        if (modalTitle) modalTitle.textContent = 'Post New Job';
+        // Update button text to "Post Job" when adding
+        const submitBtn = document.getElementById('submit-job-btn');
+        if (submitBtn) submitBtn.textContent = 'Post Job';
+        
+        // Set action to 'add'
+        const formActionField = document.getElementById('form-action');
+        if (formActionField) {
+            formActionField.value = 'add';
+        }
+        
+        // Reset form action to job_postings route for adding
+        form.action = '{{ url_for("job_postings") }}';
+        
+        // Set default values - ensure status is 'active' so job is immediately visible to applicants
+        const statusField = document.getElementById('status');
+        if (statusField) {
+            statusField.value = 'active';
+            // Ensure the form will submit with 'active' status
+        }
+        
+        
+        // Open modal - use direct DOM manipulation for reliability
+                const modal = document.getElementById('job-modal');
+                if (modal) {
+                    modal.classList.remove('hidden');
+            if (document.body) {
+                    document.body.classList.add('modal-open');
+                    document.body.style.overflow = 'hidden';
+                }
+        }
+    };
+    
+    // Cache jobs array and DOM elements for performance
+    let cachedJobs = null;
+    let cachedElements = {};
+    
+    function getCachedElement(id) {
+        if (!cachedElements[id]) {
+            cachedElements[id] = document.getElementById(id);
+        }
+        return cachedElements[id];
+    }
+    
+    window.openEditModal = function(jobId) {
+        // Defer all heavy operations to avoid blocking the click handler
+        setTimeout(function() {
+            let job;
+            try {
+                // Cache jobs array on first access
+                if (!cachedJobs) {
+                    cachedJobs = {% if jobs %}{{ jobs|tojson|safe }}{% else %}[]{% endif %};
+                }
+                
+                if (!cachedJobs || !Array.isArray(cachedJobs)) {
+                    alert('Unable to load job data. Please refresh the page and try again.');
+                    return;
+                }
+                
+                // Use parseInt once and cache
+                const targetId = parseInt(jobId);
+                job = cachedJobs.find(j => j.job_id === targetId);
+                if (!job) {
+                    alert('Job not found. Please refresh the page and try again.');
+                    return;
+                }
+            } catch (error) {
+                alert('An error occurred while opening the edit form. Please refresh the page and try again.');
+                return;
+            }
+            
+            // Determine status value
+            let statusValue = job.status || 'active';
+            // Map old statuses to new ones
+            if (statusValue === 'open' || statusValue === 'published' || statusValue === 'draft') {
+                statusValue = 'active';
+            } else if (statusValue === 'archived') {
+                statusValue = 'closed';
+            }
+            // Ensure only 'active' or 'closed'
+            if (statusValue !== 'active' && statusValue !== 'closed') {
+                statusValue = 'active';
+            }
+            
+            // Batch all DOM reads first
+            const modalTitle = getCachedElement('modal-title');
+            const form = getCachedElement('job-form');
+            const formActionField = getCachedElement('form-action');
+            const jobIdField = getCachedElement('job-id');
+            const titleField = getCachedElement('title');
+            const descriptionField = getCachedElement('description');
+            const requirementsField = getCachedElement('requirements');
+            const statusField = getCachedElement('status');
+            const branchField = getCachedElement('branch-id');
+            const positionField = getCachedElement('position-id');
+            const modal = getCachedElement('job-modal');
+            
+            if (!form) {
+                alert('Form not found. Please refresh the page.');
+                return;
+            }
+            
+            if (!modal) {
+                alert('Edit modal not found. Please refresh the page.');
+                return;
+            }
+            
+            // Batch all DOM writes in requestAnimationFrame
+            requestAnimationFrame(function() {
+                // Update modal title
+                if (modalTitle) {
+                    modalTitle.textContent = 'Edit Job Posting';
+                    // Update button text to "Update Job" when editing
+                    const submitBtn = document.getElementById('submit-job-btn');
+                    if (submitBtn) submitBtn.textContent = 'Update Job';
+                }
+                
+                // Set form action for update
+                if (formActionField) {
+                    formActionField.value = 'update';
+                }
+                
+                // Ensure CSRF token exists before updating form
+                let csrfToken = form.querySelector('input[name="csrf_token"]');
+                if (!csrfToken) {
+                    csrfToken = document.createElement('input');
+                    csrfToken.type = 'hidden';
+                    csrfToken.name = 'csrf_token';
+                    csrfToken.value = '{{ csrf_token() }}';
+                    form.insertBefore(csrfToken, form.firstChild);
+                }
+                
+                // Set form action URL for update route
+                const updateUrl = '{{ url_for("update_job_posting", job_id=0) }}'.replace('0', jobId);
+                form.action = updateUrl;
+                form.method = 'POST';
+                
+                // Update all form fields
+                if (jobIdField) jobIdField.value = job.job_id || '';
+                if (titleField) titleField.value = job.title || job.job_title || '';
+                if (descriptionField) descriptionField.value = job.description || job.job_description || '';
+                if (requirementsField) requirementsField.value = job.requirements || job.job_requirements || '';
+                if (statusField) statusField.value = statusValue;
+                if (branchField) branchField.value = job.branch_id || '';
+                if (positionField) positionField.value = job.position_title || job.position || job.position_name || '';
+                
+                // Open modal
+                modal.classList.remove('hidden');
+                if (document.body) {
+                    document.body.classList.add('modal-open');
+                    document.body.style.overflow = 'hidden';
+                }
+            });
+        }, 0);
+    };
+    
+    // Search and filter with URL parameters (same as manage_branches.html)
+    function applyFilters() {
+        const searchInput = document.getElementById('keyword-filter');
+        const branchFilter = document.getElementById('branch-filter');
+        const positionFilter = document.getElementById('position-filter');
+        const statusFilter = document.getElementById('status-filter');
+        const keyword = searchInput?.value || '';
+        const branch = branchFilter?.value || '';
+        const position = positionFilter?.value || '';
+        const status = statusFilter?.value || '';
+        
+        // Build URL with filters
+        const params = new URLSearchParams();
+        if (keyword.trim()) {
+            params.set('keyword', keyword.trim());
+        }
+        if (branch) {
+            params.set('branch_id', branch);
+        }
+        if (position) {
+            params.set('position_id', position);
+        }
+        if (status) {
+            params.set('status', status);
+        }
+        
+        // Update URL and reload
+        const url = new URL(window.location.href);
+        url.search = params.toString();
+        window.location.href = url.toString();
+    }
+    
+    // Debounce search input to avoid too many requests
+    let searchTimeout;
+    document.getElementById('keyword-filter')?.addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            applyFilters();
+        }, 500); // Wait 500ms after user stops typing
+    });
+    
+    // Apply filters immediately on filter change
+    document.getElementById('branch-filter')?.addEventListener('change', function(e) {
+        applyFilters();
+    });
+    
+    document.getElementById('position-filter')?.addEventListener('change', function(e) {
+        applyFilters();
+    });
+    
+    document.getElementById('status-filter')?.addEventListener('change', function(e) {
+        applyFilters();
+    });
+    
+    // Allow Enter key to submit search immediately
+    document.getElementById('keyword-filter')?.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            clearTimeout(searchTimeout);
+            applyFilters();
+        }
+    });
+    
+    // Add form submission handler to validate and ensure proper submission
+    document.addEventListener('DOMContentLoaded', function() {
+        const jobForm = document.getElementById('job-form');
+        if (jobForm) {
+            jobForm.addEventListener('submit', function(e) {
+                const formAction = document.getElementById('form-action');
+                const action = formAction ? formAction.value : 'add';
+                
+                // Create FormData from the form
+                const formData = new FormData(this);
+                
+                // Validate required fields
+                const title = formData.get('title');
+                const description = formData.get('description');
+                const requirements = formData.get('requirements');
+                
+                if (!title || !title.trim()) {
+                    e.preventDefault();
+                    alert('Job title is required.');
+                    return false;
+                }
+                
+                if (!description || !description.trim()) {
+                    e.preventDefault();
+                    alert('Job description is required.');
+                    return false;
+                }
+                
+                if (!requirements || !requirements.trim()) {
+                    e.preventDefault();
+                    alert('Job requirements are required.');
+                    return false;
+                }
+                
+                // If updating, ensure we have job_id
+                if (action === 'update') {
+                    const jobId = formData.get('job_id');
+                    if (!jobId) {
+                        e.preventDefault();
+                        alert('Job ID is missing. Please refresh and try again.');
+                        return false;
+                    }
+                }
+                
+                // Ensure CSRF token exists
+                const csrfToken = formData.get('csrf_token');
+                if (!csrfToken) {
+                    e.preventDefault();
+                    alert('Security token missing. Please refresh the page and try again.');
+                    return false;
+                }
+                
+                // Allow form to submit normally
+                return true;
+            });
+        }
+    });
+    
+    // Date formatting function - handles various date formats and ensures correct timezone
+    function formatDateTime(dateValue) {
+        if (!dateValue || dateValue === 'None' || dateValue === 'null' || dateValue === '') return '';
+        
+        try {
+            let date;
+            
+            // Handle string dates
+            if (typeof dateValue === 'string') {
+                // Remove any extra whitespace
+                dateValue = dateValue.trim();
+                
+                // Check if already formatted (e.g., "Jan 15, 2025 02:30 PM" from backend)
+                // If it matches the expected format, return as-is
+                if (/^[A-Za-z]{3} \d{1,2}, \d{4} \d{2}:\d{2} (AM|PM)$/.test(dateValue)) {
+                    return dateValue;
+                }
+                
+                // Try ISO format first (with T separator)
+                if (dateValue.includes('T')) {
+                    date = new Date(dateValue);
+                } 
+                // Try MySQL datetime format: YYYY-MM-DD HH:MM:SS or YYYY-MM-DD HH:MM:SS.microseconds
+                else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(dateValue)) {
+                    // Replace space with T to make it ISO-like for parsing
+                    // Handle microseconds if present
+                    const cleanDate = dateValue.split('.')[0];
+                    const isoString = cleanDate.replace(' ', 'T');
+                    date = new Date(isoString);
+                }
+                // Try date-only format: YYYY-MM-DD
+                else if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                    date = new Date(dateValue + 'T00:00:00');
+                }
+                // Try standard Date parsing
+                else {
+                    date = new Date(dateValue);
+                }
+            } 
+            // Handle Date objects
+            else if (dateValue instanceof Date) {
+                date = dateValue;
+            }
+            // Handle numbers (timestamps)
+            else if (typeof dateValue === 'number') {
+                date = new Date(dateValue);
+            }
+            else {
+                return String(dateValue);
+            }
+            
+            // Check if date is valid
+            if (!date || isNaN(date.getTime())) {
+                console.warn('Invalid date value:', dateValue);
+                return '';
+            }
+            
+            // Use local timezone to format date correctly
+            // Format: "Jan 15, 2025 02:30 PM" (12-hour format, local time)
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const month = months[date.getMonth()];
+            const day = date.getDate();
+            const year = date.getFullYear();
+            let hours = date.getHours();
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // the hour '0' should be '12'
+            const hoursStr = String(hours).padStart(2, '0');
+            
+            return `${month} ${day}, ${year} ${hoursStr}:${minutes} ${ampm}`;
+        } catch (e) {
+            console.error('Error formatting date:', e, dateValue);
+            return '';
+        }
+    }
+    
+    // Job Details Modal Functions
+    let currentJobId = null;
+    
+    window.openJobDetailsModal = function(jobId) {
+        currentJobId = jobId;
+        const modal = document.getElementById('job-details-modal');
+        const content = document.getElementById('job-details-content');
+        const title = document.getElementById('job-details-title');
+        
+        if (!modal || !content) {
+            console.error('Job details modal elements not found');
+            return;
+        }
+        
+        // Show modal and loading state
+        modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+        
+        content.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-3xl text-gray-400 mb-2"></i>
+                <p class="text-gray-400">Loading job details...</p>
+            </div>
+        `;
+        
+        // Get job data from cached jobs array
+        if (!cachedJobs) {
+            // Jobs data from backend - dates are already formatted by format_human_datetime filter
+            cachedJobs = {% if jobs %}{{ jobs|tojson|safe }}{% else %}[]{% endif %};
+        }
+        
+        const job = cachedJobs.find(j => j.job_id === parseInt(jobId));
+        
+        if (!job) {
+            content.innerHTML = `
+                <div class="text-center py-8 text-red-400">
+                    <i class="fas fa-exclamation-triangle text-3xl mb-2"></i>
+                    <p>Job not found. Please refresh the page.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Determine status display
+        let statusValue = job.status || 'active';
+        if (statusValue === 'open' || statusValue === 'published' || statusValue === 'draft') {
+            statusValue = 'active';
+        } else if (statusValue === 'archived') {
+            statusValue = 'closed';
+        }
+        const statusDisplay = statusValue === 'active' ? 'Active' : 'Closed';
+        const statusClass = statusValue === 'active' 
+            ? 'bg-green-600/20 text-green-400 border-green-600/30' 
+            : 'bg-gray-600/20 text-gray-400 border-gray-600/30';
+        
+        // Build job details HTML
+        const jobDetailsHTML = `
+            <div class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Job Title</label>
+                        <p class="text-white font-semibold text-lg">${job.title || job.job_title || ''}</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Status</label>
+                        <span class="status-badge px-3 py-1 rounded-full text-xs font-semibold border ${statusClass}">
+                            ${statusDisplay}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Branch</label>
+                        <p class="text-gray-300">${job.branch_name || 'All Branches'}</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Position</label>
+                        <p class="text-gray-300">${job.position_title || job.position || job.position_name || job.title || ''}</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Posted By</label>
+                    <p class="text-gray-300">${job.posted_by_name || job.created_by_name || 'System'}</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Description</label>
+                    <div class="mt-2 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                        <p class="text-gray-300 whitespace-pre-wrap">${(job.description || job.job_description || 'No description provided').replace(/\n/g, '<br>')}</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Requirements</label>
+                    <div class="mt-2 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                        <p class="text-gray-300 whitespace-pre-wrap">${(job.requirements || job.job_requirements || 'No requirements provided').replace(/\n/g, '<br>')}</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Applications</label>
+                        <p class="text-gray-300">
+                            <span class="px-2 py-1 rounded-full bg-blue-600/20 text-blue-400 text-sm">${job.application_count || 0} applications</span>
+                        </p>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Posted Date</label>
+                        <p class="text-gray-300">${formatDateTime(job.posted_at || job.created_at)}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Update title and content
+        if (title) {
+            title.textContent = `Job Details: ${job.title || job.job_title || 'Untitled'}`;
+        }
+        content.innerHTML = jobDetailsHTML;
+    };
+    
+    window.editJobFromDetails = function() {
+        if (currentJobId) {
+            closeModal('job-details-modal');
+            // Small delay to ensure modal is closed before opening edit modal
+            setTimeout(function() {
+                if (typeof window.openEditModal === 'function') {
+                    window.openEditModal(currentJobId);
+                }
+            }, 100);
+        }
+    };
+</script>
+{% endblock %}

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - J&T Express Recruitment System</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo-container {
+            margin-bottom: 20px;
+        }
+        .logo-img {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #dc2626;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-bottom: 10px;
+            margin-top: 15px;
+        }
+        .title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .content {
+            color: #555;
+            margin-bottom: 30px;
+        }
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .verify-button {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #2563eb;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .verify-button:hover {
+            background-color: #1d4ed8;
+        }
+        .link-fallback {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f3f4f6;
+            border-radius: 6px;
+            font-size: 14px;
+            word-break: break-all;
+            color: #6b7280;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .security-note {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #92400e;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="logo">J&T Express</div>
+            <div style="color: #6b7280; font-size: 14px; margin-top: 10px;">Recruitment System</div>
+        </div>
+        
+        <h1 class="title">Verify Your Email Address</h1>
+        
+        <div class="content">
+            <p>Thank you for registering with J&T Express Recruitment System!</p>
+            
+            <p>To complete your registration and start applying for jobs, please verify your email address by clicking the button below:</p>
+        </div>
+        
+        <div class="button-container">
+            <a href="{{ verification_url }}" class="verify-button">Verify Email Address</a>
+        </div>
+        
+        <div class="link-fallback">
+            <strong>If the button doesn't work, copy and paste this link into your browser:</strong><br>
+            <a href="{{ verification_url }}" style="color: #2563eb; word-break: break-all;">{{ verification_url }}</a>
+        </div>
+        
+        <div class="security-note">
+            <strong>⚠️ Security Notice:</strong> This verification link will expire after 60 seconds. If you did not create this account, you can safely ignore this email.
+        </div>
+        
+        <div class="content" style="margin-top: 30px;">
+            <p>If you're having trouble verifying your email, you can request a new verification link from the login page.</p>
+        </div>
+    </div>
+</body>
+</html>
+

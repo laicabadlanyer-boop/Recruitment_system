@@ -1,0 +1,498 @@
+{% extends "applicant/_base.html" %}
+
+{% block title %}Interviews • Applicant{% endblock %}
+
+{% block extra_css %}
+<style>
+    .interview-card {
+        border-radius: 1.75rem;
+        padding: 1.5rem;
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(14px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set upcoming = upcoming or [] %}
+{% set past = past or [] %}
+<section class="space-y-6">
+    <header class="glass-panel rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+            <p class="text-xs uppercase tracking-[0.4em] text-slate-400">Interview hub</p>
+            <h1 class="text-3xl font-semibold text-white">Interviews</h1>
+            <p class="text-slate-400 text-sm mt-2">Confirm, cancel, and review interview details.</p>
+        </div>
+        {% if upcoming %}
+        <div>
+            <button onclick="deleteAllInterviews()" class="px-4 py-2.5 rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-white text-sm font-semibold transition-colors flex items-center gap-2" title="Delete All Interviews">
+                <i class="fas fa-trash"></i>
+                <span>Delete All</span>
+            </button>
+        </div>
+        {% endif %}
+    </header>
+
+    <div class="space-y-6">
+        <section class="space-y-4">
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-200">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.4em] text-slate-400">Upcoming</p>
+                        <h2 class="text-xl font-semibold text-white">Next Interviews</h2>
+                    </div>
+                </div>
+            </div>
+            {% if upcoming %}
+            <div class="space-y-4">
+                {% for interview in upcoming %}
+                {% set status = (interview.interview_status or 'scheduled')|lower %}
+                {% set status_config = {
+                    'scheduled': {'class': 'border-blue-400/30 text-blue-200 bg-blue-500/10', 'icon': 'fa-calendar', 'label': 'Scheduled'},
+                    'confirmed': {'class': 'border-emerald-400/30 text-emerald-200 bg-emerald-500/10', 'icon': 'fa-check-circle', 'label': 'Confirmed'},
+                    'cancelled': {'class': 'border-rose-400/30 text-rose-200 bg-rose-500/10', 'icon': 'fa-times-circle', 'label': 'Cancelled'},
+                    'rescheduled': {'class': 'border-amber-400/30 text-amber-200 bg-amber-500/10', 'icon': 'fa-clock-rotate-left', 'label': 'Rescheduled'}
+                } %}
+                {% set status_info = status_config.get(status, status_config['scheduled']) %}
+                <article class="interview-card" data-interview-id="{{ interview.interview_id }}">
+                    <div class="flex flex-col gap-3">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="text-sm uppercase tracking-[0.4em] text-slate-400">{{ interview.branch_name }}</p>
+                                <h3 class="text-2xl font-semibold text-white">{{ interview.job_title }}</h3>
+                            </div>
+                            <div class="flex flex-col items-end gap-2">
+                                <span class="px-4 py-2 rounded-full text-xs font-semibold border border-emerald-400/30 text-emerald-200">
+                                    {{ interview.interview_mode|title }}
+                                </span>
+                                <span class="interview-status-badge px-4 py-2 rounded-full text-xs font-semibold border {{ status_info.class }}" data-interview-id="{{ interview.interview_id }}">
+                                    <i class="fas {{ status_info.icon }} mr-1"></i>{{ status_info.label }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-slate-300">
+                            <span><i class="fas fa-calendar mr-2 text-slate-500"></i>{{ interview.scheduled_date }}</span>
+                            <span><i class="fas fa-map-marker-alt mr-2 text-slate-500"></i>{{ interview.location or 'TBD' }}</span>
+                            <span><i class="fas fa-clipboard-list mr-2 text-slate-500"></i>{{ interview.application_status|title }}</span>
+                            {% if interview.notes %}
+                            <span class="col-span-full text-slate-400 text-xs">Notes: {{ interview.notes }}</span>
+                            {% endif %}
+                        </div>
+                        {% if status == 'scheduled' or status == 'rescheduled' %}
+                        <div class="flex flex-wrap gap-3">
+                            <form method="post" action="{{ url_for('applicant_interviews') }}" class="inline confirm-interview-form" data-interview-id="{{ interview.interview_id }}" data-action-url="{{ url_for('applicant_interviews') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="confirm_interview">
+                                <input type="hidden" name="interview_id" value="{{ interview.interview_id }}">
+                                <button type="submit" class="px-5 py-2.5 rounded-2xl bg-emerald-500/80 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors">
+                                    <i class="fas fa-check mr-2"></i>Confirm Attendance
+                                </button>
+                            </form>
+                            <form method="post" action="{{ url_for('applicant_interviews') }}" class="inline cancel-interview-form" data-interview-id="{{ interview.interview_id }}" data-action-url="{{ url_for('applicant_interviews') }}" data-confirm="Are you sure you want to cancel this interview? This action cannot be undone.">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="cancel_interview">
+                                <input type="hidden" name="interview_id" value="{{ interview.interview_id }}">
+                                <button type="submit" class="px-5 py-2.5 rounded-2xl border border-rose-400/40 text-rose-200 text-sm font-semibold hover:bg-rose-500/10 transition-colors">
+                                    <i class="fas fa-xmark mr-2"></i>Cancel Interview
+                                </button>
+                            </form>
+                        </div>
+                        {% elif status == 'confirmed' %}
+                        <div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-400/30">
+                            <i class="fas fa-check-circle text-emerald-200"></i>
+                            <span class="text-sm font-semibold text-emerald-200">You have confirmed your attendance for this interview.</span>
+                        </div>
+                        {% elif status == 'cancelled' %}
+                        <div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-500/10 border border-rose-400/30">
+                            <i class="fas fa-times-circle text-rose-200"></i>
+                            <span class="text-sm font-semibold text-rose-200">This interview has been cancelled.</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="glass-panel rounded-2xl p-8 border border-dashed border-white/20 text-center text-slate-400 text-sm">
+                No upcoming interviews yet.
+            </div>
+            {% endif %}
+        </section>
+    </div>
+
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+
+// AJAX handlers for confirm/cancel interview
+document.addEventListener('DOMContentLoaded', function() {
+    // Helper function to update interview status badge everywhere
+    function updateInterviewStatusBadge(interviewId, newStatus, newLabel, newIcon) {
+        const statusConfig = {
+            'confirmed': {
+                'class': 'border-emerald-400/30 text-emerald-200 bg-emerald-500/10',
+                'icon': 'fa-check-circle',
+                'label': 'Confirmed'
+            },
+            'cancelled': {
+                'class': 'border-rose-400/30 text-rose-200 bg-rose-500/10',
+                'icon': 'fa-times-circle',
+                'label': 'Cancelled'
+            }
+        };
+        
+        const config = statusConfig[newStatus] || {
+            'class': newStatus === 'confirmed' ? 'border-emerald-400/30 text-emerald-200 bg-emerald-500/10' : 'border-rose-400/30 text-rose-200 bg-rose-500/10',
+            'icon': newIcon || 'fa-check-circle',
+            'label': newLabel || 'Confirmed'
+        };
+        
+        // Update in main list (upcoming interviews)
+        // Find badge by interview ID - try multiple methods
+        const card = document.querySelector('.interview-card[data-interview-id="' + interviewId + '"]');
+        let mainBadge = null;
+        
+        if (card) {
+            // First try: Find badge within the card
+            mainBadge = card.querySelector('.interview-status-badge[data-interview-id="' + interviewId + '"]');
+            // Second try: Find any badge in the card
+            if (!mainBadge) {
+                mainBadge = card.querySelector('.interview-status-badge');
+            }
+        }
+        
+        // Third try: Global search
+        if (!mainBadge) {
+            mainBadge = document.querySelector('.interview-status-badge[data-interview-id="' + interviewId + '"]');
+        }
+        
+        if (mainBadge) {
+            mainBadge.className = 'interview-status-badge px-4 py-2 rounded-full text-xs font-semibold border ' + config.class;
+            mainBadge.setAttribute('data-interview-id', interviewId);
+            mainBadge.innerHTML = '<i class="fas ' + config.icon + ' mr-1"></i>' + config.label;
+            // Force a reflow to ensure changes are visible
+            void mainBadge.offsetHeight;
+        }
+    }
+    
+    // Handle confirm interview
+    document.querySelectorAll('.confirm-interview-form').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const form = e.target;
+            const interviewId = form.getAttribute('data-interview-id');
+            
+            // Prevent duplicate submissions by checking if already confirmed
+            const cardCheck = document.querySelector('.interview-card[data-interview-id="' + interviewId + '"]');
+            if (cardCheck && cardCheck.querySelector('.bg-emerald-500\\/10')) {
+                // Already confirmed, don't submit again
+                return;
+            }
+            const card = document.querySelector('.interview-card[data-interview-id="' + interviewId + '"]') || form.closest('.interview-card');
+            
+            // Update UI immediately (optimistic update) - no loading spinner
+            if (card) {
+                // First, update status badge immediately
+                updateInterviewStatusBadge(interviewId, 'confirmed', 'Confirmed', 'fa-check-circle');
+                
+                // Find the container that holds both confirm and cancel buttons
+                // The container is: <div class="flex flex-wrap gap-3">
+                // Use form.closest() - most reliable method
+                let actionDiv = form.closest('div.flex.flex-wrap.gap-3');
+                
+                // If not found, try direct query from card
+                if (!actionDiv) {
+                    actionDiv = card.querySelector('div.flex.flex-wrap.gap-3');
+                }
+                
+                // If still not found, find by checking if forms share the same parent
+                if (!actionDiv) {
+                    const cancelForm = card.querySelector('.cancel-interview-form[data-interview-id="' + interviewId + '"]');
+                    if (cancelForm && form.parentElement === cancelForm.parentElement) {
+                        actionDiv = form.parentElement;
+                    }
+                }
+                
+                // Replace the entire button container with just the confirmed message (no cancel button)
+                if (actionDiv) {
+                    // Replace immediately with confirmed message - this removes both buttons
+                    actionDiv.innerHTML = 
+                        '<div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-400/30">' +
+                            '<i class="fas fa-check-circle text-emerald-200"></i>' +
+                            '<span class="text-sm font-semibold text-emerald-200">You have confirmed your attendance for this interview.</span>' +
+                        '</div>';
+                } else {
+                    // Fallback: Find both forms and replace their shared parent
+                    const cancelForm = card.querySelector('.cancel-interview-form[data-interview-id="' + interviewId + '"]');
+                    const confirmForm = card.querySelector('.confirm-interview-form[data-interview-id="' + interviewId + '"]');
+                    
+                    if (confirmForm && cancelForm) {
+                        // Check if they share the same parent
+                        if (confirmForm.parentElement === cancelForm.parentElement) {
+                            // Both forms share the same parent - replace it
+                            confirmForm.parentElement.innerHTML = 
+                                '<div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-400/30">' +
+                                    '<i class="fas fa-check-circle text-emerald-200"></i>' +
+                                    '<span class="text-sm font-semibold text-emerald-200">You have confirmed your attendance for this interview.</span>' +
+                                '</div>';
+                        } else {
+                            // Forms have different parents - remove cancel and replace confirm's parent
+                            cancelForm.remove();
+                            if (confirmForm.parentElement) {
+                                confirmForm.parentElement.innerHTML = 
+                                    '<div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-400/30">' +
+                                        '<i class="fas fa-check-circle text-emerald-200"></i>' +
+                                        '<span class="text-sm font-semibold text-emerald-200">You have confirmed your attendance for this interview.</span>' +
+                                    '</div>';
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Send request in background (non-blocking)
+            const formData = new FormData(form);
+            const formActionUrl = form.getAttribute('action') || form.getAttribute('data-action-url') || (typeof form.action === 'string' ? form.action : window.location.pathname);
+            
+            // Send request without blocking UI - handle response silently
+            fetch(formActionUrl, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                body: formData
+            }).then(response => {
+                // Check if response is OK
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                // Try to parse JSON, but handle non-JSON responses gracefully
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json();
+                } else {
+                    // Not JSON response, return success since UI already updated
+                    return { success: true };
+                }
+            }).then(data => {
+                // Silently handle the response - don't display JSON
+                if (data && data.success) {
+                    // Success - UI already updated
+                } else {
+                    // If server says it failed, reload to get correct state
+                    window.location.reload();
+                }
+            }).catch(error => {
+                // Silently handle errors - reload to sync with server
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            });
+            
+            // Prevent any default form submission behavior
+            return false;
+        });
+    });
+    
+    // Handle cancel interview
+    function attachCancelHandler(form) {
+        form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const form = e.target;
+                const confirmMsg = form.getAttribute('data-confirm');
+
+                openConfirmWithCallback(async function() {
+                    const button = form.querySelector('button[type="submit"]');
+
+                    // Prevent duplicate submissions
+                    if (button && button.disabled) {
+                        return;
+                    }
+
+                    const originalText = button ? button.innerHTML : null;
+                    const interviewId = form.getAttribute('data-interview-id');
+                    const card = document.querySelector('.interview-card[data-interview-id="' + interviewId + '"]') || form.closest('.interview-card');
+
+                    // Disable button
+                    if (button) {
+                        button.disabled = true;
+                        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cancelling...';
+                    }
+
+                    try {
+                        const formData = new FormData(form);
+                        // Get the action URL properly - use getAttribute to ensure we get a string
+                        const formActionUrl = form.getAttribute('action') || form.getAttribute('data-action-url') || (typeof form.action === 'string' ? form.action : window.location.pathname);
+                        const response = await fetch(formActionUrl, {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json'
+                            },
+                            body: formData
+                        });
+                
+                let data;
+                try {
+                    data = await response.json();
+                } catch (jsonError) {
+                    // If response is not JSON, reload the page
+                    console.error('Response is not JSON, reloading page:', jsonError);
+                    window.location.reload();
+                    return;
+                }
+                
+                if (data.success) {
+                    // Get the actual status from server response
+                    const actualStatus = (data.status || 'cancelled').toLowerCase();
+                    
+                    // Update UI immediately
+                    if (card) {
+                        // First, update status badge immediately
+                        updateInterviewStatusBadge(interviewId, actualStatus, 'Cancelled', 'fa-times-circle');
+                        
+                        // Find the container that holds the buttons
+                        let actionDiv = form.closest('div.flex.flex-wrap.gap-3') || 
+                                       form.closest('div.space-y-3') ||
+                                       card.querySelector('div.flex.flex-wrap.gap-3') ||
+                                       card.querySelector('div.space-y-3');
+                        
+                        // If still not found, find by checking form's parent
+                        if (!actionDiv) {
+                            const cancelForm = card.querySelector('.cancel-interview-form[data-interview-id="' + interviewId + '"]');
+                            const confirmForm = card.querySelector('.confirm-interview-form[data-interview-id="' + interviewId + '"]');
+                            
+                            if (cancelForm && confirmForm && cancelForm.parentElement === confirmForm.parentElement) {
+                                actionDiv = cancelForm.parentElement;
+                            } else if (cancelForm) {
+                                actionDiv = cancelForm.parentElement;
+                            } else if (confirmForm) {
+                                actionDiv = confirmForm.parentElement;
+                            } else {
+                                actionDiv = form.parentElement;
+                            }
+                        }
+                        
+                        // Replace the entire button container with just the cancelled message (no confirm button)
+                        if (actionDiv) {
+                            actionDiv.innerHTML = 
+                                '<div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-500/10 border border-rose-400/30">' +
+                                    '<i class="fas fa-times-circle text-rose-200"></i>' +
+                                    '<span class="text-sm font-semibold text-rose-200">This interview has been cancelled.</span>' +
+                                '</div>';
+                        }
+                    }
+                    
+                    // Show success message
+                    showNotification(data.message || 'Interview cancellation requested.', 'success');
+                } else {
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                    showNotification(data.message || 'Unable to cancel interview.', 'error');
+                }
+            } catch (error) {
+                button.disabled = false;
+                button.innerHTML = originalText;
+                showNotification('An error occurred. Please try again.', 'error');
+                console.error('Error cancelling interview:', error);
+                // If it's a network error or parsing error, reload the page
+                if (error.message && (error.message.includes('JSON') || error.message.includes('fetch'))) {
+                    setTimeout(() => window.location.reload(), 2000);
+                }
+            }
+        });
+    }
+    
+    // Attach handlers to all cancel forms
+    document.querySelectorAll('.cancel-interview-form').forEach(attachCancelHandler);
+    
+    // Delete all interviews function
+    window.deleteAllInterviews = async function() {
+        openConfirmWithCallback(async function() {
+            try {
+                const formData = new FormData();
+                formData.append('csrf_token', '{{ csrf_token() }}');
+                formData.append('action', 'delete_all_interviews');
+
+                const response = await fetch('{{ url_for("applicant_interviews") }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+            
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                // If response is not JSON, assume success and reload
+                showNotification('All interviews deleted successfully.', 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+                return;
+            }
+            
+            if (data.success) {
+                showNotification(data.message || 'All interviews deleted successfully.', 'success');
+                // Remove all interview cards with animation
+                const cards = document.querySelectorAll('.interview-card');
+                cards.forEach((card, index) => {
+                    setTimeout(() => {
+                        card.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+                        card.style.opacity = '0';
+                        card.style.transform = 'translateY(-10px)';
+                        setTimeout(() => {
+                            card.remove();
+                        }, 300);
+                    }, index * 100);
+                });
+                // Reload page after animation
+                setTimeout(() => {
+                    window.location.reload();
+                }, cards.length * 100 + 500);
+            } else {
+                showNotification(data.message || 'Unable to delete all interviews.', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting all interviews:', error);
+            showNotification('An error occurred. Please try again.', 'error');
+        }
+    }, 'Are you sure you want to permanently delete ALL your interviews? This action cannot be undone.\n\nThis will delete ALL your interviews. Are you absolutely sure?');
+    
+    // Notification helper function
+    function showNotification(message, type) {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-2xl text-white text-sm font-semibold shadow-lg transition-all transform translate-x-0 ${
+            type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'
+        }`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 10);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.style.transform = 'translateX(400px)';
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                notification.remove();
+            }, 300);
+        }, 3000);
+    }
+});
+</script>
+{% endblock %}

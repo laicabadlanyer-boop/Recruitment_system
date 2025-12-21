@@ -1,0 +1,4 @@
+resume_id,applicant_id,file_name,stored_path,resolved_path,exists
+1,1,jaymark.pdf,uploads/resumes/1_fb205f8eb6f3494a84c6e7ab9f60b229.pdf,C:\xampp\htdocs\Recruitment System\instance\uploads\resumes\1_fb205f8eb6f3494a84c6e7ab9f60b229.pdf,False
+2,1,Group_3_Cyber_Security_Law.pdf,uploads/resumes/1_36e5f9c3ee8347ab83b768c50dc2553c.pdf,C:\xampp\htdocs\Recruitment System\instance\uploads\resumes\1_36e5f9c3ee8347ab83b768c50dc2553c.pdf,False
+3,1,jaymark.pdf,uploads/resumes/1_9314e078fa2e48a4b89d19d6491e3b10.pdf,C:\xampp\htdocs\Recruitment System\instance\uploads\resumes\1_9314e078fa2e48a4b89d19d6491e3b10.pdf,False

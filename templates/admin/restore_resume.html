@@ -1,0 +1,24 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}Restore Resume{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <h2 class="text-xl font-bold mb-4">Restore Resume</h2>
+    {% if resume %}
+    <p class="mb-4">Applicant ID: <strong>{{ resume.applicant_id }}</strong></p>
+    <p class="mb-4">Current file: <strong>{{ resume.file_name or 'None' }}</strong></p>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-300">Select file</label>
+            <input type="file" name="resume_file" accept=".pdf,.doc,.docx" class="mt-2" />
+        </div>
+        <div class="flex gap-2">
+            <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded">Upload & Restore</button>
+            <a href="{{ url_for('admin_view_resume', resume_id=resume.resume_id if resume else 0) }}" class="px-4 py-2 bg-gray-600 text-white rounded">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,202 @@
+{% extends "applicant/_base.html" %}
+
+{% block title %}Applications • Applicant{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-chip {
+        padding: 0.45rem 1rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border: 1px solid transparent;
+    }
+    .apps-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .apps-table th,
+    .apps-table td {
+        padding: 1rem 1.25rem;
+        font-size: 0.9rem;
+    }
+    .apps-table thead {
+        background: rgba(15, 23, 42, 0.75);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+        color: #94a3b8;
+    }
+    .apps-table tbody tr {
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    .apps-table tbody tr:hover {
+        background: rgba(148, 163, 184, 0.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set analytics = analytics or {} %}
+{% set applications = applications or [] %}
+<section class="space-y-6">
+    <header class="glass-panel rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+            <p class="text-xs uppercase tracking-[0.4em] text-slate-400">Application tracker</p>
+            <h1 class="text-3xl font-semibold text-white">My Applications</h1>
+            <p class="text-slate-400 text-sm mt-2">Monitor statuses, interviews, and actions.</p>
+        </div>
+        <div class="text-right">
+            <p class="text-4xl font-bold text-white">{{ analytics.total_applications or 0 }}</p>
+            <p class="text-xs uppercase tracking-[0.4em] text-slate-400 mt-1">Total submitted</p>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {% set breakdown = analytics.status_breakdown or {} %}
+        {% set status_cards = [
+            {'key': 'pending', 'label': 'Pending', 'color': 'from-amber-500/40 to-amber-500/5'},
+            {'key': 'interviewed', 'label': 'Interview', 'color': 'from-indigo-500/40 to-indigo-500/5'},
+            {'key': 'hired', 'label': 'Hired', 'color': 'from-emerald-500/40 to-emerald-500/5'},
+            {'key': 'rejected', 'label': 'Rejected', 'color': 'from-rose-500/40 to-rose-500/5'},
+        ] %}
+        {% for card in status_cards %}
+        <a href="{{ url_for('applicant_applications', status=card.key) if status_filter != card.key else url_for('applicant_applications') }}" 
+           class="rounded-2xl p-4 bg-gradient-to-br {{ card.color }} border border-white/10 hover:border-white/30 transition-all cursor-pointer {{ 'ring-2 ring-white/50' if status_filter == card.key else '' }}">
+            <p class="text-xs uppercase tracking-[0.3em] text-white/70">{{ card.label }}</p>
+            <p class="text-3xl font-semibold text-white mt-2">{{ breakdown.get(card.key, 0) }}</p>
+        </a>
+        {% endfor %}
+    </div>
+    
+    <!-- Status Filter -->
+    {% set status_filter = status_filter or '' %}
+    <div class="glass-panel rounded-3xl p-4 border border-white/10">
+        <form method="GET" action="{{ url_for('applicant_applications') }}" class="flex items-center gap-4">
+            <label for="status-filter" class="text-sm text-slate-300 font-medium">Filter by Status:</label>
+            <select id="status-filter" name="status" 
+                    onchange="this.form.submit()"
+                    class="px-4 py-2 rounded-xl bg-slate-800/50 border border-white/10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50">
+                <option value="">All Status</option>
+                <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                <option value="interviewed" {% if status_filter == 'interviewed' %}selected{% endif %}>Interviewed</option>
+                <option value="hired" {% if status_filter == 'hired' or status_filter == 'accepted' %}selected{% endif %}>Hired</option>
+                <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
+            </select>
+            {% if status_filter %}
+            <a href="{{ url_for('applicant_applications') }}" class="px-4 py-2 rounded-xl border border-rose-400/40 text-rose-200 text-sm font-semibold hover:bg-rose-500/10">
+                Clear Filter
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <section class="glass-panel rounded-3xl p-0 overflow-hidden border border-white/10">
+        {% if applications %}
+        <div class="overflow-auto">
+            <table class="apps-table min-w-[960px]">
+                <thead>
+                    <tr>
+                        <th class="text-left">Job Position</th>
+                        <th class="text-left">Branch</th>
+                        <th class="text-left">Status</th>
+                        <th class="text-left">Submitted</th>
+                        <th class="text-left">Interview</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for app in applications %}
+                    {% set states = {
+                        'pending': {'label': 'Pending', 'classes': 'bg-amber-500/10 text-amber-200 border border-amber-500/30', 'icon': 'fa-hourglass-half'},
+                        'scheduled': {'label': 'Scheduled', 'classes': 'bg-purple-500/10 text-purple-200 border border-purple-500/30', 'icon': 'fa-calendar-check'},
+                        'interviewed': {'label': 'Interviewed', 'classes': 'bg-cyan-500/10 text-cyan-200 border border-cyan-500/30', 'icon': 'fa-video'},
+                        'hired': {'label': 'Hired', 'classes': 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/30', 'icon': 'fa-star'},
+                        'rejected': {'label': 'Rejected', 'classes': 'bg-rose-500/10 text-rose-200 border border-rose-500/30', 'icon': 'fa-circle-xmark'}
+                    } %}
+                    {% set app_status = (app.status or 'pending')|lower %}
+                    {% if app_status == 'accepted' %}
+                        {% set app_status = 'hired' %}
+                    {% elif app_status in ['reviewed', 'shortlisted'] %}
+                        {% set app_status = 'pending' %}
+                    {% endif %}
+                    {# Note: withdrawn is already normalized to rejected in backend #}
+                    {% set state = states.get(app_status, {'label': (app.status or 'Pending')|title, 'classes': 'bg-slate-500/10 text-slate-200 border border-slate-500/30', 'icon': 'fa-file'}) %}
+                    <tr>
+                        <td>
+                            <p class="text-white font-semibold">{{ app.job_title }}</p>
+                            {% if not app.is_viewed %}
+                            <span class="text-xs text-emerald-300 font-semibold flex items-center gap-1 mt-1"><i class="fas fa-bolt"></i>New</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-slate-300">{{ app.branch_name }}</td>
+                        <td>
+                            <button type="button"
+                                class="status-chip {{ state.classes }}"
+                                data-application-id="{{ app.application_id }}"
+                                data-job="{{ app.job_title }}"
+                                data-position="{{ app.position_title }}"
+                                data-branch="{{ app.branch_name }}"
+                                data-status="{{ state.label }}"
+                                data-status-class="{{ state.classes }}"
+                                data-status-icon="{{ state.icon }}"
+                                data-submitted="{{ app.submitted_at }}"
+                                data-updated="{{ app.updated_at or app.submitted_at }}"
+                                data-has-interview="{{ 'true' if app.has_interview else 'false' }}"
+                                data-interview-date="{{ app.interview_date or '' }}"
+                                data-interview-mode="{{ (app.interview_mode or '')|title }}"
+                                data-interview-location="{{ app.interview_location or 'To be confirmed' }}"
+                                data-is-new="{{ 'true' if not app.is_viewed else 'false' }}">
+                                <i class="fas {{ state.icon }}"></i>{{ state.label }}
+                            </button>
+                        </td>
+                        <td class="text-slate-300">{{ app.submitted_at }}</td>
+                        <td>
+                            {% if app.has_interview %}
+                            <div class="text-xs">
+                                <p class="text-emerald-300 font-semibold flex items-center gap-2">
+                                    <i class="fas fa-calendar-check"></i>{{ app.interview_date }}
+                                </p>
+                                <p class="text-slate-400 mt-1">{{ app.interview_mode|title }} • {{ app.interview_location or 'TBD' }}</p>
+                            </div>
+                            {% else %}
+                            <span class="text-slate-500 text-xs">Not scheduled</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <div class="flex justify-end gap-2">
+                                {% if not app.is_viewed %}
+                                <a href="{{ url_for('apply_to_job', job_id=app.job_id, edit=app.application_id) }}" class="px-4 py-2 rounded-2xl border border-white/20 text-white/80 text-xs font-semibold hover:text-white">
+                                        Edit
+                                    </a>
+                            {% else %}
+                                <button type="button" class="px-4 py-2 rounded-2xl border border-white/20 text-white/40 text-xs font-semibold bg-slate-700 cursor-not-allowed" title="Cannot edit - already viewed by HR" aria-disabled="true" disabled>
+                                    Edit
+                                </button>
+                            {% endif %}
+                                <form method="post" action="{{ url_for('delete_application', application_id=app.application_id) }}" onsubmit="return openConfirmOnFormSubmit(this, 'Are you sure you want to permanently delete this application? This action cannot be undone.');" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="px-4 py-2 rounded-2xl border border-red-500/40 text-red-200 text-xs font-semibold hover:bg-red-500/10">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center">
+            <p class="text-white text-lg font-semibold mb-2">No applications yet</p>
+            <p class="text-slate-400 text-sm mb-6">Start applying to showcase your profile.</p>
+            <a href="{{ url_for('jobs') }}" class="px-6 py-3 rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-white text-sm font-semibold">Browse jobs</a>
+        </div>
+        {% endif %}
+    </section>
+{% endblock %}

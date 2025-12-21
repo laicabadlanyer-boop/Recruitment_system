@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="description" content="J&T Express Admin Dashboard - Manage branches, HR accounts, job postings, and recruitment">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{% block title %}Admin - J&T Express{% endblock %}</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpeg') }}" type="image/jpeg">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/whitehat_logo.jpg') }}" type="image/jpeg">
+    <!-- Tailwind CSS CDN - Development only. For production, use PostCSS plugin or CLI -->
+    <!-- Suppress console warning in development -->
+    <script>
+        (function() {
+            // Suppress Tailwind CDN warning before it loads
+            if (typeof console !== 'undefined') {
+                const originalWarn = console.warn || function() {};
+                const originalError = console.error || function() {};
+                
+                console.warn = function(...args) {
+                    const message = args[0];
+                    if (typeof message === 'string' && (
+                        message.includes('cdn.tailwindcss.com') ||
+                        message.includes('should not be used in production') ||
+                        message.includes('Tailwind CSS')
+                    )) {
+                        return; // Suppress Tailwind CDN warning
+                    }
+                    originalWarn.apply(console, args);
+                };
+                
+                console.error = function(...args) {
+                    const message = args[0];
+                    if (typeof message === 'string' && (
+                        message.includes('cdn.tailwindcss.com') ||
+                        message.includes('should not be used in production') ||
+                        message.includes('Tailwind CSS')
+                    )) {
+                        return; // Suppress Tailwind CDN error
+                    }
+                    originalError.apply(console, args);
+                };
+            }
+        })();
+    </script>
+    <script>
+    // Global flash message helper (admin) - create only if missing
+    if (typeof window.showFlashMessage !== 'function') {
+        window.showFlashMessage = function(message, type) {
+            try {
+                var flashContainer = document.createElement('div');
+                flashContainer.className = 'global-flash fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2';
+                flashContainer.style.transition = 'opacity 0.3s ease';
+                flashContainer.style.opacity = '1';
+                flashContainer.style.pointerEvents = 'auto';
+                flashContainer.style.display = 'flex';
+                if (type === 'success') {
+                    flashContainer.style.background = '#16a34a';
+                    flashContainer.style.color = '#fff';
+                } else {
+                    flashContainer.style.background = '#dc2626';
+                    flashContainer.style.color = '#fff';
+                }
+                flashContainer.innerHTML = '<span style="font-weight:600;margin-right:.5rem">' + (type === 'success' ? '✔' : '⚠') + '</span><span>' + (message || '') + '</span>';
+                document.body.appendChild(flashContainer);
+                setTimeout(function() {
+                    flashContainer.style.opacity = '0';
+                    setTimeout(function(){ try{ flashContainer.remove(); }catch(e){} }, 300);
+                }, 3000);
+            } catch (e) { console.error('showFlashMessage error', e); }
+        };
+    }
+
+    // Intercept archive form submissions on admin side and follow JSON redirect
+    document.addEventListener('submit', function(e){
+        try{
+            var form = e.target;
+            if (!form || !form.action) return;
+            if (form.action.indexOf('/archive') === -1) return;
+            e.preventDefault();
+            var submitBtn = form.querySelector('button[type=submit], input[type=submit]');
+            var origHtml = submitBtn && submitBtn.innerHTML;
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...'; }
+            var fd = new FormData(form);
+            try{ if (form.dataset && form.dataset.redirect) fd.append('redirect', form.dataset.redirect); }catch(e){}
+            fetch(form.action, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                credentials: 'same-origin'
+            }).then(function(resp){
+                if (resp.status === 401) { window.showFlashMessage('Session expired. Please login.', 'error'); return null; }
+                if (resp.status === 403) { window.showFlashMessage('Not authorized to perform this action.', 'error'); return null; }
+                var ct = resp.headers.get('content-type') || '';
+                if (resp.ok && ct.indexOf('application/json') !== -1) return resp.json();
+                if (resp.redirected) { window.location.href = resp.url; return null; }
+                return resp.text().then(function(text){ try{ if (text.indexOf('Redirecting')!==-1){ var m = text.match(/href="([^"]+)"/); if (m) { window.location.href = m[1]; return null; } } }catch(_){ } return { success: true }; });
+            }).then(function(data){
+                if (!data) return;
+                var redirectTarget = (data && data.redirect) || (form.dataset && form.dataset.redirect) || '/admin/archived-applicants';
+                if (redirectTarget) { window.location.href = redirectTarget; return; }
+                if (data && data.success) {
+                    var row = form.closest('tr.applicant-row'); if (row) row.remove();
+                    window.showFlashMessage(data.message || 'Application archived.', 'success');
+                } else {
+                    window.showFlashMessage((data && data.error) || 'Failed to archive application.', 'error');
+                }
+            }).catch(function(err){ console.error('Archive submit handler (admin) error', err); window.showFlashMessage('Failed to archive application.', 'error'); })
+            .finally(function(){ if (submitBtn) { submitBtn.disabled = false; if (origHtml) submitBtn.innerHTML = origHtml; } });
+        }catch(e){ console.error('Archive submit interception (admin)', e); }
+    }, { capture: false });
+    // Robust helper: programmatically submit/archive via AJAX from button or form (admin)
+    window.archiveFormSubmit = function(triggerEl){
+        try{
+            var btn = triggerEl && (triggerEl.tagName && triggerEl.tagName.toLowerCase() === 'form' ? (triggerEl.querySelector('button[type=submit]')||triggerEl) : triggerEl);
+            var form = btn && btn.closest && btn.closest('form');
+            if (!form) return;
+            var redirectTarget = (form.dataset && form.dataset.redirect) || '/admin/archived-applicants';
+            var origHtml = btn && btn.innerHTML;
+            if (btn) { btn.disabled = true; try{ btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...'; }catch(e){} }
+            var fd2 = new FormData(form);
+            try{ if (form.dataset && form.dataset.redirect) fd2.append('redirect', form.dataset.redirect); }catch(e){}
+            fetch(form.action, { method: 'POST', body: fd2, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function(resp){ if (resp.status === 401) { window.showFlashMessage('Session expired. Please login.', 'error'); return null; } if (resp.status === 403) { window.showFlashMessage('Not authorized to perform this action.', 'error'); return null; } var ct = resp.headers.get('content-type')||''; if (resp.ok && ct.indexOf('application/json')!==-1) return resp.json(); if (resp.redirected) { var finalUrl = resp.url || ''; if (finalUrl.indexOf('archived-applicants') !== -1) { window.location.href = finalUrl; return null; } window.showFlashMessage('Session expired or not authorized. Please reload and login.', 'error'); return null; } return resp.text().then(function(){ return { success: true }; }); })
+            .then(function(data){ if (!data) return; var final = (form.dataset && form.dataset.redirect) || (data && data.redirect) || redirectTarget; if (final) { window.location.href = final; return; } if (data && data.success) { var row = form.closest('tr.applicant-row'); if (row) row.remove(); window.showFlashMessage(data.message || 'Application archived.', 'success'); } else { window.showFlashMessage((data && data.error) || 'Failed to archive application.', 'error'); } })
+            .catch(function(err){ console.error('archiveFormSubmit (admin) error', err); window.showFlashMessage('Failed to archive application.', 'error'); })
+            .finally(function(){ if (btn) { btn.disabled = false; try{ if (origHtml) btn.innerHTML = origHtml; }catch(e){} } });
+        }catch(e){ console.error('archiveFormSubmit (admin) top error', e); }
+    };
+    </script>
+    <script>
+    // Click-level fallback for archive buttons on admin side
+    document.addEventListener('click', function(e){
+        try{
+            var btn = e.target.closest && e.target.closest('button[title="Archive Applicant"], button[title="Archive application"], button[data-auto-archive], button[data-auto-archive="true"]');
+            if (!btn) return;
+            var form = btn.closest('form');
+            if (!form || !form.action) return;
+            if (form.action.indexOf('/archive') === -1) return;
+            e.preventDefault();
+            var submitBtn = btn;
+            var origHtml = submitBtn && submitBtn.innerHTML;
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Loading...'; }
+            var fd3 = new FormData(form);
+            try{ if (form.dataset && form.dataset.redirect) fd3.append('redirect', form.dataset.redirect); }catch(e){}
+            fetch(form.action, { method: 'POST', body: fd3, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function(resp){ if (resp.status === 401) { window.showFlashMessage('Session expired. Please login.', 'error'); return null; } if (resp.status === 403) { window.showFlashMessage('Not authorized to perform this action.', 'error'); return null; } var ct = resp.headers.get('content-type')||''; if (resp.ok && ct.indexOf('application/json')!==-1) return resp.json(); if (resp.redirected) { var finalUrl = resp.url || ''; if (finalUrl.indexOf('archived-applicants') !== -1) { window.location.href = finalUrl; return null; } window.showFlashMessage('Session expired or not authorized. Please reload and login.', 'error'); return null; } return resp.text().then(function(){ return { success: true }; }); })
+            .then(function(data){
+                if (!data) return;
+                // Prefer explicit form-provided redirect to ensure consistent admin navigation
+                var redirectTarget = (form.dataset && form.dataset.redirect) || (data && data.redirect) || '/admin/archived-applicants';
+                if (redirectTarget) { window.location.href = redirectTarget; return; }
+                if (data && data.success) { window.showFlashMessage(data.message||'Application archived.','success'); var row = form.closest('tr.applicant-row'); if (row) row.remove(); } else { window.showFlashMessage((data && data.error) || 'Failed to archive.', 'error'); }
+            })
+            .catch(function(err){ console.error('Archive click handler (admin) error', err); window.showFlashMessage('Failed to archive application.', 'error'); })
+            .finally(function(){ if (submitBtn) { submitBtn.disabled = false; if (origHtml) submitBtn.innerHTML = origHtml; } });
+        }catch(e){ console.error('Archive click fallback (admin)', e); }
+    }, { capture: false });
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { 
+            font-family: 'Inter', sans-serif; 
+            box-sizing: border-box;
+        }
+        /* Screen reader only - visually hidden but accessible to screen readers */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+        body { 
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Main Layout Container */
+        .main-layout-container {
+            display: flex;
+            flex: 1;
+            min-height: calc(100vh - 73px);
+            position: relative;
+            width: 100%;
+            flex-wrap: nowrap;
+            align-items: stretch;
+        }
+        
+        /* Sidebar width adjustments for desktop */
+        @media (min-width: 1024px) {
+            #sidebar {
+                flex-shrink: 0;
+            }
+        }
+        @media (min-width: 1280px) {
+            #sidebar {
+                width: 18rem; /* 288px - w-72 */
+            }
+        }
+        
+        /* Main content flex adjustments */
+        main {
+            flex: 1;
+            min-width: 0;
+        }
+        @media (min-width: 1024px) {
+            main {
+                margin-left: 0;
+            }
+        }
+        
+        /* Sidebar Styling */
+        .sidebar-item { 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            border: 1px solid transparent; 
+            position: relative;
+        }
+        .sidebar-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 0;
+            background: #dc2626;
+            transition: height 0.3s ease;
+            border-radius: 0 2px 2px 0;
+        }
+        .sidebar-item:hover { 
+            border-color: rgba(220,38,38,0.2); 
+            background: rgba(220,38,38,0.08); 
+            transform: translateX(4px);
+        }
+        .sidebar-item:hover::before {
+            height: 60%;
+        }
+        .sidebar-item.active { 
+            border-color: rgba(220,38,38,0.3); 
+            background: rgba(220,38,38,0.12); 
+            color: #fff;
+        }
+        .sidebar-item.active::before {
+            height: 80%;
+        }
+        
+        /* Sidebar Overlay for Mobile */
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 35;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        .sidebar-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* Sidebar Mobile */
+        #sidebar {
+            z-index: 40;
+        }
+        @media (max-width: 1023px) {
+            #sidebar {
+                box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+            }
+        }
+        
+        /* Card Styling - Enhanced */
+        .card { 
+            border: 1px solid rgba(255,255,255,0.06); 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.02);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(17, 24, 39, 0.85);
+        }
+        .card:hover {
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(220,38,38,0.15);
+            transform: translateY(-2px);
+            border-color: rgba(220,38,38,0.2);
+        }
+        .card-interactive {
+            cursor: pointer;
+        }
+        .card-interactive:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(220,38,38,0.2), 0 0 0 1px rgba(220,38,38,0.25);
+        }
+        
+        /* Form Inputs - Enhanced */
+        .form-input { 
+            background: rgba(17,24,39,0.8); 
+            border: 1px solid rgba(31,41,55,0.8); 
+            color: #fff; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 100%;
+            border-radius: 0.5rem;
+        }
+        .form-input::placeholder {
+            color: rgba(156, 163, 175, 0.5);
+        }
+        .form-input:hover {
+            border-color: rgba(220,38,38,0.3);
+            background: rgba(17,24,39,0.9);
+        }
+        .form-input:focus { 
+            outline: none; 
+            border-color: #dc2626; 
+            box-shadow: 0 0 0 3px rgba(220,38,38,0.15), 0 0 20px rgba(220,38,38,0.1);
+            background: rgba(17,24,39,0.95);
+        }
+        select.form-input {
+            cursor: pointer;
+        }
+        textarea.form-input {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(31,41,55,0.5); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(220,38,38,0.5); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(220,38,38,0.7); }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); }
+            to { transform: translateX(-100%); }
+        }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        .animate-slide-in { animation: slideIn 0.3s ease-out; }
+        .animate-slide-out { animation: slideOut 0.3s ease-out; }
+        
+        /* Table Styling - Enhanced */
+        table {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        table thead {
+            background: rgba(31, 41, 55, 0.5);
+        }
+        table thead th {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.75rem;
+        }
+        table tbody tr {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-bottom: 1px solid rgba(31, 41, 55, 0.5);
+        }
+        table tbody tr:last-child {
+            border-bottom: none;
+        }
+        table tbody tr:hover {
+            background: rgba(220,38,38,0.08);
+            transform: scale(1.01);
+        }
+        table tbody td {
+            padding: 1rem 0.75rem;
+            vertical-align: middle;
+            word-break: break-word;
+        }
+        .table-container {
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+        /* Generic responsive media */
+        img, video, canvas, svg {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        /* Button Enhancements - Perfect */
+        .btn-primary {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            box-shadow: 0 4px 15px rgba(220,38,38,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(220,38,38,0.3);
+            font-weight: 600;
+            letter-spacing: 0.025em;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+            box-shadow: 0 6px 20px rgba(220,38,38,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+            transform: translateY(-2px);
+            border-color: rgba(220,38,38,0.5);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 10px rgba(220,38,38,0.3);
+        }
+        .btn-secondary {
+            background: rgba(31, 41, 55, 0.8);
+            border: 1px solid rgba(75, 85, 99, 0.5);
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+        .btn-secondary:hover {
+            background: rgba(31, 41, 55, 1);
+            border-color: rgba(220,38,38,0.3);
+            transform: translateY(-1px);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(220,38,38,0.4);
+            color: rgba(248, 200, 200, 0.9);
+            transition: all 0.3s ease;
+        }
+        .btn-outline:hover {
+            background: rgba(220,38,38,0.1);
+            border-color: rgba(220,38,38,0.6);
+            color: #fff;
+        }
+        
+        /* Status Badges - Enhanced */
+        .status-badge {
+            padding: 0.375rem 0.875rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            letter-spacing: 0.025em;
+        }
+        .status-badge i {
+            font-size: 0.625rem;
+        }
+        .badge-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: rgba(167, 243, 208, 0.95);
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: rgba(254, 240, 138, 0.95);
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: rgba(254, 202, 202, 0.95);
+            border-color: rgba(239, 68, 68, 0.35);
+        }
+        .badge-info {
+            background: rgba(59, 130, 246, 0.15);
+            color: rgba(191, 219, 254, 0.95);
+            border-color: rgba(59, 130, 246, 0.35);
+        }
+        .badge-primary {
+            background: rgba(220, 38, 38, 0.15);
+            color: rgba(248, 200, 200, 0.95);
+            border-color: rgba(220, 38, 38, 0.35);
+        }
+        
+        /* Gradient Text */
+        .gradient-text {
+            background: linear-gradient(135deg, #fff 0%, #d1d5db 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            border: 2px solid rgba(220,38,38,0.2);
+            border-top-color: #dc2626;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Notification Badge */
+        .notification-badge {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        /* Modal Styling - Centered Layout */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-out;
+        }
+        .modal-overlay:not(.hidden) {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-overlay::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            position: relative;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            background: rgba(17, 24, 39, 0.98);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(220, 38, 38, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            overflow-y: auto;
+            animation: modalFadeIn 0.3s ease-out;
+            display: flex;
+            flex-direction: column;
+            z-index: 101;
+        }
+        @media (min-width: 640px) {
+            .modal-content {
+                width: 85%;
+                max-width: 700px;
+            }
+        }
+        @media (min-width: 1024px) {
+            .modal-content {
+                max-width: 800px;
+            }
+        }
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        /* Modal open state - prevent body scroll */
+        body.modal-open {
+            overflow: hidden;
+        }
+        
+        /* Responsive Typography */
+        @media (max-width: 639px) {
+            .text-3xl { font-size: 1.5rem; }
+            .text-2xl { font-size: 1.25rem; }
+            .text-xl { font-size: 1.125rem; }
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.25rem; }
+            h3 { font-size: 1.125rem; }
+            .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            table { min-width: 600px; }
+        }
+        @media (min-width: 640px) and (max-width: 1023px) {
+            h1 { font-size: 1.75rem; }
+            h2 { font-size: 1.5rem; }
+            h3 { font-size: 1.25rem; }
+            .table-container { overflow-x: auto; }
+        }
+        @media (min-width: 1024px) {
+            h1 { font-size: 2rem; }
+            h2 { font-size: 1.75rem; }
+            h3 { font-size: 1.5rem; }
+        }
+        @media (min-width: 1440px) {
+            h1 { font-size: 2.25rem; }
+            h2 { font-size: 2rem; }
+            h3 { font-size: 1.75rem; }
+        }
+        
+        /* Enhanced Responsive Tables */
+        @media (max-width: 767px) {
+            .table-container {
+                margin: 0 -0.5rem;
+                padding: 0 0.5rem;
+            }
+            table {
+                font-size: 0.75rem;
+            }
+            th, td {
+                padding: 0.5rem 0.25rem;
+            }
+        }
+        
+        /* Responsive Forms */
+        @media (max-width: 639px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            .modal-content {
+                margin: 1rem;
+                max-width: calc(100% - 2rem);
+            }
+        }
+        
+        /* Responsive Buttons */
+        @media (max-width: 639px) {
+            .btn-primary {
+                width: 100%;
+                justify-content: center;
+            }
+            /* Do not force column on elements that must stay inline on mobile (e.g., navbar groups) */
+            .flex.gap-2:not(.no-col-on-mobile) {
+                flex-direction: column;
+            }
+            .flex.gap-2:not(.no-col-on-mobile) > * {
+                width: 100%;
+            }
+            /* Keep navbar controls inline on mobile despite global .flex.gap-2 rule */
+            .no-col-on-mobile {
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                width: auto !important;
+                align-items: center !important;
+                white-space: nowrap !important;
+            }
+            .no-col-on-mobile > * {
+                flex: 0 0 auto !important;
+                white-space: nowrap !important;
+            }
+        }
+        
+        /* Prevent body scroll when modal is open */
+        body.modal-open {
+            overflow: hidden;
+        }
+        
+        /* Responsive Breakpoints System - Compact Spacing */
+        /* Mobile: < 640px */
+        @media (max-width: 639px) {
+            .card { margin: 0.25rem 0; }
+            table { font-size: 0.875rem; }
+            .content-section {
+                margin-bottom: 0.75rem;
+            }
+        }
+        
+        /* Tablet: 640px - 1023px */
+        @media (min-width: 640px) and (max-width: 1023px) {
+            .content-section {
+                margin-bottom: 1rem;
+            }
+        }
+        
+        /* Laptop: 1024px - 1439px */
+        @media (min-width: 1024px) and (max-width: 1439px) {
+            .content-section {
+                margin-bottom: 1.25rem;
+            }
+        }
+        
+        /* Desktop: 1440px - 1919px */
+        @media (min-width: 1440px) and (max-width: 1919px) {
+            .content-section {
+                margin-bottom: 1.5rem;
+            }
+        }
+        
+        /* Large Desktop: >= 1920px */
+        @media (min-width: 1920px) {
+            .content-section {
+                margin-bottom: 1.75rem;
+            }
+        }
+        
+        /* Grid Improvements - Responsive Stats Grid - Compact */
+        .stats-grid {
+            display: grid;
+            gap: 0.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        }
+        @media (min-width: 640px) {
+            .stats-grid {
+                gap: 0.75rem;
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            }
+        }
+        @media (min-width: 768px) {
+            .stats-grid {
+                gap: 0.875rem;
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            }
+        }
+        @media (min-width: 1024px) {
+            .stats-grid {
+                gap: 1rem;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            }
+        }
+        @media (min-width: 1440px) {
+            .stats-grid {
+                gap: 1.125rem;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+        }
+        
+        /* Table Container - Enhanced Responsiveness */
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 0.75rem;
+            margin: 0 -0.5rem;
+            padding: 0 0.5rem;
+        }
+        @media (min-width: 768px) {
+            .table-container {
+                margin: 0;
+                padding: 0;
+            }
+        }
+        
+        /* Form Grid - Responsive Form Layouts - Compact */
+        .form-grid {
+            display: grid;
+            gap: 0.5rem;
+            grid-template-columns: 1fr;
+        }
+        @media (min-width: 640px) {
+            .form-grid {
+                gap: 0.75rem;
+            }
+        }
+        @media (min-width: 768px) {
+            .form-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 0.875rem;
+            }
+        }
+        @media (min-width: 1024px) {
+            .form-grid {
+                gap: 1rem;
+            }
+        }
+        @media (min-width: 1440px) {
+            .form-grid {
+                gap: 1.125rem;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="text-white min-h-screen">
+    {% if dashboard_data is defined %}
+        {% set admin_data = dashboard_data %}
+    {% else %}
+        {% set admin_data = {} %}
+    {% endif %}
+    {% if admin_data is mapping %}
+        {% set admin_notifs = admin_data.get('notifications', []) or [] %}
+        {% set admin_notif_raw = admin_data.get('notifications_count') %}
+    {% elif admin_data %}
+        {% set admin_notifs = admin_data.notifications if admin_data.notifications is defined else [] %}
+        {% set admin_notif_raw = admin_data.notifications_count if admin_data.notifications_count is defined else None %}
+    {% else %}
+        {% set admin_notifs = [] %}
+        {% set admin_notif_raw = None %}
+    {% endif %}
+    {% set admin_notif_count = admin_notif_raw if admin_notif_raw is not none else (admin_notifs|length if admin_notifs is not none else 0) %}
+    {% set admin_notif_display = '99+' if admin_notif_count > 99 else admin_notif_count %}
+    <!-- Sidebar Overlay for Mobile -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+    
+    <!-- Top Navigation -->
+    <nav class="bg-black/95 backdrop-blur-md border-b-2 border-red-600/50 shadow-2xl shadow-red-600/20 sticky top-0 z-50">
+        <div class="max-w-full mx-auto px-3 sm:px-4 md:px-5 lg:px-6 xl:px-8 2xl:px-10">
+            <div class="flex items-center justify-between gap-2 py-2.5 sm:py-3 md:py-3.5 lg:py-4 flex-nowrap no-col-on-mobile">
+                <!-- Left: Menu + Brand (match HR structure) -->
+                <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 no-col-on-mobile">
+                    <button id="mobile-menu-btn" class="lg:hidden bg-gray-800/50 p-2 rounded-lg hover:bg-gray-700/50 transition-all" aria-label="Open menu">
+                        <i class="fas fa-bars text-base sm:text-lg"></i>
+                    </button>
+                    <a href="{{ url_for('admin_dashboard') }}" class="flex items-center gap-2 sm:gap-3 group flex-shrink-0">
+                        <div class="relative">
+                            <img src="{{ url_for('static', filename='images/logo.jpeg') }}" alt="WHITEHAT 88" class="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full object-cover ring-2 ring-red-600/30 group-hover:ring-red-600/60 transition-all">
+                        </div>
+                        <div class="hidden sm:block">
+                            <p class="text-base sm:text-lg md:text-xl font-bold tracking-wide gradient-text whitespace-nowrap">J&T Express</p>
+                            <p class="text-[11px] text-gray-400 -mt-0.5 uppercase tracking-wider hidden md:block">Admin Portal</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="hidden lg:flex items-center gap-4 flex-shrink-0">
+                    <div class="relative">
+                        <button id="notification-btn" class="relative p-2.5 rounded-lg hover:bg-gray-800/50 transition-all group">
+                            <i class="fas fa-bell text-gray-300 text-lg group-hover:text-red-400 transition-colors"></i>
+                            {% if admin_notif_count > 0 %}
+                            <span class="notification-badge absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center font-semibold shadow-lg">{{ admin_notif_display }}</span>
+                            {% endif %}
+                        </button>
+                        <div id="notification-dd" class="absolute right-0 mt-2 w-80 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-800 hidden z-50 overflow-hidden">
+                            <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                                <h3 class="text-sm font-semibold text-white">Notifications</h3>
+                                <a href="{{ url_for('admin_notifications') }}" class="text-xs text-red-400 hover:text-red-300">View All</a>
+                            </div>
+                            <div class="max-h-96 overflow-y-auto">
+                                {% if admin_notifs %}
+                                <div class="divide-y divide-gray-800">
+                                    {% for note in admin_notifs[:5] %}
+                                    {% set message = note.message or '' %}
+                                    {% if not (message.strip().startswith('{') and '"success"' in message) %}
+                                    <div class="p-4 hover:bg-gray-800/40 transition-colors">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div>
+                                                <p class="text-sm font-semibold text-white">{{ note.title or 'Notification' }}</p>
+                                                <p class="text-xs text-gray-400">{{ message }}</p>
+                                            </div>
+                                            <span class="text-[11px] text-gray-500 whitespace-nowrap">{{ note.time or '' }}</span>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <div class="p-4 text-center text-gray-400 text-sm">
+                                    <i class="fas fa-bell-slash text-2xl mb-2 text-gray-600"></i>
+                                    <p>No new notifications</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <button id="user-btn" class="flex items-center gap-2 sm:gap-3 p-2 rounded-lg hover:bg-gray-800/50 transition-all group">
+                            <div class="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-red-600 to-red-700 rounded-full flex items-center justify-center border-2 border-red-500/30 group-hover:border-red-500/60 transition-all shadow-lg">
+                                <i class="fas fa-user text-white text-xs sm:text-sm"></i>
+                            </div>
+                            <div class="text-left hidden xl:block">
+                                <p class="text-sm font-semibold whitespace-nowrap">{{ current_user.name if current_user else 'Admin' }}</p>
+                                <p class="text-xs text-gray-400 truncate max-w-[150px]">{{ current_user.email if current_user else '' }}</p>
+                            </div>
+                            <i class="fas fa-chevron-down text-gray-400 text-xs group-hover:text-white transition-colors hidden xl:block"></i>
+                        </button>
+                        <div id="user-dd" class="absolute right-0 mt-2 w-56 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-800 hidden z-50 overflow-hidden">
+                            <a href="{{ url_for('admin_profile') }}" class="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-800/50 transition-colors border-b border-gray-800">
+                                <i class="fas fa-user-circle mr-2 text-red-400"></i>Profile
+                            </a>
+                            <div class="border-t border-gray-800"></div>
+                            <a href="{{ url_for('logout') }}" class="block px-4 py-3 text-sm text-red-400 hover:bg-red-600/20 transition-colors">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Mobile controls (mirrored layout with HR) -->
+                <div class="lg:hidden flex items-center gap-2 relative flex-shrink-0 no-col-on-mobile ml-auto">
+                    <button id="notification-btn-mobile" class="relative p-2 rounded-lg hover:bg-gray-800/50 transition-all" aria-haspopup="true" aria-expanded="false" aria-label="Open notifications">
+                        <i class="fas fa-bell text-gray-300 text-base"></i>
+                        {% if admin_notif_count > 0 %}
+                        <span class="notification-badge absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] rounded-full min-w-[1.1rem] h-4 px-1 flex items-center justify-center font-semibold">{{ admin_notif_display }}</span>
+                        {% endif %}
+                    </button>
+                    <!-- Mobile Notifications Dropdown -->
+                    <div id="notification-dd-mobile" class="absolute right-0 top-12 w-72 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-800 hidden z-50 overflow-hidden">
+                        <div class="p-3 border-b border-gray-800 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-white">Notifications</h3>
+                            <a href="{{ url_for('admin_notifications') }}" class="text-xs text-red-400 hover:text-red-200 font-semibold flex items-center gap-1">
+                                View all <i class="fas fa-arrow-right text-[10px]"></i>
+                            </a>
+                        </div>
+                        <div class="max-h-80 overflow-y-auto">
+                            {% if admin_notifs %}
+                                {% for note in admin_notifs[:5] %}
+                                {% set message = note.message or '' %}
+                                {% if not (message.strip().startswith('{') and '"success"' in message) %}
+                                <div class="p-3 border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                                    <p class="text-sm text-gray-200">{{ note.title or 'Notification' }}</p>
+                                    <p class="text-xs text-gray-400">{{ message or '' }}</p>
+                                    <span class="text-[11px] text-gray-500">{{ note.time or note.sent_at }}</span>
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                            {% else %}
+                            <div class="p-6 text-center text-gray-400 text-sm">
+                                <i class="fas fa-bell-slash text-2xl mb-2 text-gray-600"></i>
+                                <p>No new notifications</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <button id="user-btn-mobile" class="p-2 rounded-lg hover:bg-gray-800/50 transition-all" aria-haspopup="true" aria-expanded="false" aria-label="Open user menu">
+                        <i class="fas fa-user text-gray-300 text-base"></i>
+                    </button>
+                    <!-- Mobile User Dropdown -->
+                    <div id="user-dd-mobile" class="absolute right-0 top-12 w-56 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-800 hidden z-50 overflow-hidden">
+                        <a href="{{ url_for('admin_profile') }}" class="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-800/50 transition-colors border-b border-gray-800">
+                            <i class="fas fa-user-circle mr-2 text-red-400"></i>Profile
+                        </a>
+                        <a href="{{ url_for('logout') }}" class="block px-4 py-3 text-sm text-red-400 hover:bg-red-600/20 transition-colors">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-layout-container">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="w-72 bg-gray-900/95 backdrop-blur-md border-r border-gray-800 fixed top-[73px] left-0 h-[calc(100vh-73px)] transition-all duration-300 ease-in-out -translate-x-full lg:translate-x-0 z-40 shadow-2xl custom-scrollbar flex-shrink-0 overflow-y-auto">
+            <div class="flex justify-between items-center p-4 border-b border-gray-800 lg:hidden sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+                <span class="font-semibold text-base sm:text-lg">Navigation</span>
+                <button id="close-sidebar" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            <nav class="mt-2 sm:mt-6 px-2 sm:px-3 pb-6">
+                <ul class="space-y-1">
+                    <!-- Dashboard -->
+                    <li><a href="{{ url_for('admin_dashboard') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-chart-line w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">Dashboard</span></a></li>
+                    <li><a href="{{ url_for('hr_accounts') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-user-tie w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">HR Accounts</span></a></li>
+                    <li><a href="{{ url_for('manage_branches') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-code-branch w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">Manage Branches</span></a></li>
+                    <li><a href="{{ url_for('job_postings') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-briefcase w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">Job Vacancies</span></a></li>
+                    <li><a href="{{ url_for('applicants') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-user-tie w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">Applicants</span></a></li>
+                    <li><a href="{{ url_for('admin_archived_applicants') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-archive w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">Archived Applicants</span></a></li>
+                    <li><a href="{{ url_for('admin_interviews') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-calendar-check w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">Interviews</span></a></li>
+                    <li><a href="{{ url_for('admin_notifications') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-bell w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">Notifications</span></a></li>
+                    <li><a href="{{ url_for('admin_reports_analytics') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-chart-bar w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">Reports & Analytics</span></a></li>
+                    <li><a href="{{ url_for('admin_security') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-history w-5 sm:w-6 text-center"></i><span class="ml-2 sm:ml-3 font-medium">Activity Logs</span></a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 w-full min-w-0 ml-0 lg:ml-64 xl:ml-72 p-2 sm:p-3 md:p-4 lg:p-5 xl:p-6 space-y-2 sm:space-y-3 md:space-y-3 lg:space-y-4 animate-fade-in pb-3 sm:pb-4 md:pb-5 lg:pb-6 transition-all duration-300 overflow-x-hidden">
+            {# Flash messages removed per user request #}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script>
+        // Shared DOM helpers and safe form normalization
+        (function initSharedHelpers(){
+            window.$id = function(id){ try { return document.getElementById(id); } catch(e) { return null; } };
+            window.onKeyToggle = function(el, menu, event){
+                if (!el || !menu) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    menu.classList.toggle('hidden');
+                    const expanded = el.getAttribute('aria-expanded') === 'true';
+                    el.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                }
+            };
+            document.addEventListener('DOMContentLoaded', function(){
+                try {
+                    // Add ids from names, pair labels, add aria-required where needed
+                    const usedIds = new Set(Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+                    const ensureUniqueId = (base) => {
+                        let cleaned = String(base || '').trim().replace(/\s+/g, '-').toLowerCase();
+                        if (!cleaned) cleaned = 'field';
+                        let candidate = cleaned;
+                        let i = 1;
+                        while (usedIds.has(candidate)) {
+                            candidate = `${cleaned}-${i++}`;
+                        }
+                        usedIds.add(candidate);
+                        return candidate;
+                    };
+                    document.querySelectorAll('form').forEach(form => {
+                        form.querySelectorAll('input, select, textarea').forEach((field, idx) => {
+                            const lname = (field.name || field.id || '').toLowerCase();
+                            if (!field.id) {
+                                const base = field.name || (field.tagName.toLowerCase() + '-' + (field.type || 'field') + '-' + idx);
+                                field.id = ensureUniqueId(base);
+                            }
+                            if (field.required && !field.hasAttribute('aria-required')) {
+                                field.setAttribute('aria-required', 'true');
+                            }
+                            // Autocomplete hints based on common names
+                            if (!field.hasAttribute('autocomplete')) {
+                                if (lname.includes('email')) field.setAttribute('autocomplete', 'email');
+                                else if (lname.includes('phone') || lname.includes('contact')) field.setAttribute('autocomplete', 'tel');
+                                else if (lname.includes('name') && !lname.includes('company')) field.setAttribute('autocomplete', 'name');
+                                else if (lname.includes('company') || lname.includes('branch')) field.setAttribute('autocomplete', 'organization');
+                                else if (lname.includes('address')) field.setAttribute('autocomplete', 'street-address');
+                                else if (lname.includes('city')) field.setAttribute('autocomplete', 'address-level2');
+                                else if (lname.includes('state') || lname.includes('province')) field.setAttribute('autocomplete', 'address-level1');
+                                else if (lname.includes('zip') || lname.includes('postal')) field.setAttribute('autocomplete', 'postal-code');
+                                else if (lname.includes('date')) field.setAttribute('autocomplete', 'off');
+                                else if (lname.includes('time')) field.setAttribute('autocomplete', 'off');
+                                else if (lname.includes('location')) field.setAttribute('autocomplete', 'off');
+                            }
+                        });
+                        form.querySelectorAll('label:not([for])').forEach(label => {
+                            const control = label.querySelector('input, select, textarea');
+                            if (control && control.id) {
+                                label.setAttribute('for', control.id);
+                            }
+                        });
+                    });
+                } catch(e) {}
+            });
+        })();
+
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const mobileBtn = document.getElementById('mobile-menu-btn');
+        const closeBtn = document.getElementById('close-sidebar');
+        const userBtn = document.getElementById('user-btn');
+        const userDd = document.getElementById('user-dd');
+        
+        // Mobile sidebar toggle
+        function openSidebar() {
+            if (sidebar && sidebarOverlay) {
+                sidebar.classList.remove('-translate-x-full');
+                sidebar.classList.add('translate-x-0');
+                sidebarOverlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+        
+        function closeSidebar() {
+            if (sidebar && sidebarOverlay) {
+                sidebar.classList.add('-translate-x-full');
+                sidebar.classList.remove('translate-x-0');
+                sidebarOverlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+        
+        if (mobileBtn) {
+            mobileBtn.addEventListener('click', openSidebar);
+        }
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeSidebar);
+        }
+        if (sidebarOverlay) {
+            sidebarOverlay.addEventListener('click', closeSidebar);
+        }
+        
+        // User dropdown
+        if (userBtn && userDd) {
+            userBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                userDd.classList.toggle('hidden');
+                // Close notification dropdowns if open
+                document.getElementById('notification-dd')?.classList.add('hidden');
+                document.getElementById('notification-dd-mobile')?.classList.add('hidden');
+            });
+        }
+        
+        // Notification dropdown (desktop)
+        const notificationBtn = document.getElementById('notification-btn');
+        const notificationDd = document.getElementById('notification-dd');
+        if (notificationBtn && notificationDd) {
+            notificationBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = notificationDd.classList.contains('hidden');
+                notificationDd.classList.toggle('hidden');
+                // Close user dropdown if open
+                if (userDd) userDd.classList.add('hidden');
+                const expanded = notificationBtn.getAttribute('aria-expanded') === 'true';
+                notificationBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                
+                // Refresh notifications when dropdown is opened
+                if (isHidden && window.refreshNotifications) {
+                    window.refreshNotifications();
+                }
+            });
+            // Keyboard accessibility
+            notificationBtn.setAttribute('aria-haspopup', 'true');
+            notificationBtn.setAttribute('aria-expanded', 'false');
+            notificationBtn.addEventListener('keydown', (e) => {
+                onKeyToggle(notificationBtn, notificationDd, e);
+            });
+        }
+        
+        // Cross-portal notifications (shared)
+        (function initNotificationBridge(){
+            const STORAGE_KEY = 'wh88_notifications';
+            const CHANNEL_NAME = 'wh88_notifications';
+            let bc;
+            try { bc = new BroadcastChannel(CHANNEL_NAME); } catch(e) { bc = null; }
+
+            function readStore() {
+                try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { return []; }
+            }
+            function writeStore(list) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, 50))); // keep last 50
+            }
+            function renderIntoAdminUIs(note) {
+                const timeText = note.time || '';
+                const desktopDd = document.getElementById('notification-dd');
+                const mobileDd = document.getElementById('notification-dd-mobile');
+                const desktopBtn = document.getElementById('notification-btn');
+                const mobileBtn = document.getElementById('notification-btn-mobile');
+                const desktopItem = `
+                    <div class="p-4 hover:bg-gray-800/40 transition-colors">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <p class="text-sm font-semibold text-white">${note.title || 'Notification'}</p>
+                                <p class="text-xs text-gray-400">${note.message || ''}</p>
+                            </div>
+                            <span class="text-[11px] text-gray-500 whitespace-nowrap">${timeText}</span>
+                        </div>
+                    </div>
+                `;
+                const mobileItem = `
+                    <div class="p-3 border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                        <p class="text-sm text-gray-200">${note.title || 'Notification'}</p>
+                        <p class="text-xs text-gray-400">${note.message || ''}</p>
+                        <span class="text-[11px] text-gray-500">${timeText}</span>
+                    </div>
+                `;
+                if (desktopDd) {
+                    const listContainer = desktopDd.querySelector('.max-h-96');
+                    if (listContainer) {
+                        const emptyState = listContainer.querySelector('.text-center');
+                        if (emptyState) emptyState.remove();
+                        let wrapper = listContainer.querySelector('.divide-y');
+                        if (!wrapper) {
+                            wrapper = document.createElement('div');
+                            wrapper.className = 'divide-y divide-gray-800';
+                            listContainer.prepend(wrapper);
+                        }
+                        wrapper.insertAdjacentHTML('afterbegin', desktopItem);
+                    }
+                }
+                if (mobileDd) {
+                    const listContainerM = mobileDd.querySelector('.max-h-80');
+                    if (listContainerM) {
+                        const emptyStateM = listContainerM.querySelector('.text-center');
+                        if (emptyStateM) emptyStateM.remove();
+                        listContainerM.insertAdjacentHTML('afterbegin', mobileItem);
+                    }
+                }
+                // update badges
+                function updateBadge(btnEl, isMobile) {
+                    if (!btnEl) return;
+                    let badge = btnEl.querySelector('.notification-badge');
+                    const current = badge ? (badge.textContent.trim() === '99+' ? 99 : parseInt(badge.textContent.trim(), 10) || 0) : 0;
+                    const next = Math.min(current + 1, 99);
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = isMobile
+                          ? 'notification-badge absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] rounded-full min-w-[1.1rem] h-4 px-1 flex items-center justify-center font-semibold'
+                          : 'notification-badge absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center font-semibold shadow-lg';
+                        btnEl.appendChild(badge);
+                    }
+                    badge.textContent = next === 99 ? '99+' : String(next);
+                }
+                updateBadge(desktopBtn, false);
+                updateBadge(mobileBtn, true);
+            }
+            window.publishNotification = function(note) {
+                const list = readStore();
+                const now = new Date();
+                const payload = {
+                    title: note.title || 'System Notification',
+                    message: note.message || '',
+                    time: note.time || now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    ts: now.toISOString()
+                };
+                list.unshift(payload);
+                writeStore(list);
+                if (bc) { try { bc.postMessage(payload); } catch(e) {} }
+                // Fallback for other tabs listening to storage
+                try { localStorage.setItem(STORAGE_KEY + '_ping', String(now.getTime())); } catch(e) {}
+                // Render locally
+                renderIntoAdminUIs(payload);
+            };
+            function onIncoming(note) { renderIntoAdminUIs(note); }
+            if (bc) {
+                bc.onmessage = (e) => { if (e && e.data) onIncoming(e.data); };
+            }
+            window.addEventListener('storage', (e) => {
+                if (e.key === STORAGE_KEY + '_ping') {
+                    // Read last item and render
+                    const list = readStore();
+                    if (list && list.length > 0) onIncoming(list[0]);
+                }
+            });
+        })();
+
+        // Auto-refresh notifications dropdown
+        (function initNotificationRefresh() {
+            let refreshInterval;
+            let lastNotificationCount = {{ admin_notif_count or 0 }};
+            
+            function refreshNotifications() {
+                fetch('{{ url_for("api_admin_notifications") }}')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const desktopDd = document.getElementById('notification-dd');
+                            const mobileDd = document.getElementById('notification-dd-mobile');
+                            const desktopBtn = document.getElementById('notification-btn');
+                            const mobileBtn = document.getElementById('notification-btn-mobile');
+                            
+                            // Update badge count
+                            const unreadCount = data.unread_count || 0;
+                            const unreadDisplay = data.unread_display || 0;
+                            
+                            function updateBadge(btnEl, isMobile) {
+                                if (!btnEl) return;
+                                let badge = btnEl.querySelector('.notification-badge');
+                                if (unreadCount > 0) {
+                                    if (!badge) {
+                                        badge = document.createElement('span');
+                                        badge.className = isMobile
+                                            ? 'notification-badge absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] rounded-full min-w-[1.1rem] h-4 px-1 flex items-center justify-center font-semibold'
+                                            : 'notification-badge absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center font-semibold shadow-lg';
+                                        btnEl.appendChild(badge);
+                                    }
+                                    badge.textContent = unreadDisplay;
+                                } else {
+                                    if (badge) badge.remove();
+                                }
+                            }
+                            updateBadge(desktopBtn, false);
+                            updateBadge(mobileBtn, true);
+                            
+                            // Always update dropdown content (even when hidden) so it's ready when opened
+                            if (desktopDd) {
+                                updateDropdownContent(desktopDd, data.notifications, '.max-h-96');
+                            }
+                            if (mobileDd) {
+                                updateDropdownContent(mobileDd, data.notifications, '.max-h-80');
+                            }
+                            
+                            // If new notifications arrived, show visual indicator
+                            if (unreadCount > lastNotificationCount && lastNotificationCount > 0) {
+                                // Pulse animation on badge
+                                [desktopBtn, mobileBtn].forEach(btn => {
+                                    if (btn) {
+                                        const badge = btn.querySelector('.notification-badge');
+                                        if (badge) {
+                                            badge.classList.add('animate-pulse');
+                                            setTimeout(() => badge.classList.remove('animate-pulse'), 2000);
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            lastNotificationCount = unreadCount;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error refreshing notifications:', error);
+                    });
+            }
+            
+            function updateDropdownContent(dropdown, notifications, containerSelector) {
+                const container = dropdown.querySelector(containerSelector);
+                if (!container) return;
+                
+                if (notifications && notifications.length > 0) {
+                    let wrapper = container.querySelector('.divide-y');
+                    if (!wrapper) {
+                        wrapper = document.createElement('div');
+                        wrapper.className = 'divide-y divide-gray-800';
+                        container.innerHTML = '';
+                        container.appendChild(wrapper);
+                    }
+                    
+                    // Clear existing items
+                    wrapper.innerHTML = '';
+                    
+                    // Add new items - filter out JSON responses
+                    notifications.slice(0, 5).forEach(note => {
+                        // Skip if message looks like JSON response
+                        const message = note.message || '';
+                        if (message.trim().startsWith('{') && message.includes('"success"')) {
+                            return; // Skip JSON responses
+                        }
+                        
+                        const item = document.createElement('div');
+                        item.className = containerSelector.includes('max-h-96') 
+                            ? 'p-4 hover:bg-gray-800/40 transition-colors'
+                            : 'p-3 border-b border-gray-800 hover:bg-gray-800/50 transition-colors';
+                        item.innerHTML = `
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <p class="text-sm ${containerSelector.includes('max-h-96') ? 'font-semibold text-white' : 'text-gray-200'}">${note.title || 'Notification'}</p>
+                                    <p class="text-xs text-gray-400">${message}</p>
+                                </div>
+                                <span class="text-[11px] text-gray-500 whitespace-nowrap">${note.time || ''}</span>
+                            </div>
+                        `;
+                        wrapper.appendChild(item);
+                    });
+                } else {
+                    container.innerHTML = `
+                        <div class="p-4 text-center text-gray-400 text-sm">
+                            <i class="fas fa-bell-slash text-2xl mb-2 text-gray-600"></i>
+                            <p>No new notifications</p>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Make refreshNotifications available globally
+            window.refreshNotifications = refreshNotifications;
+            
+            // Refresh every 10 seconds
+            document.addEventListener('DOMContentLoaded', function() {
+                refreshNotifications(); // Initial load
+                refreshInterval = setInterval(refreshNotifications, 10000); // Refresh every 10 seconds
+            });
+            
+            // Clean up on page unload
+            window.addEventListener('beforeunload', function() {
+                if (refreshInterval) clearInterval(refreshInterval);
+            });
+        })();
+
+        // Auto-publish system notification from flash after settings update
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                const flashes = Array.from(document.querySelectorAll('.flash-message, [class*="flash"]')).map(el => (el.textContent || '').toLowerCase()).join(' ');
+                if (flashes.includes('settings updated')) {
+                    const now = new Date();
+                    window.publishNotification({
+                        title: 'System Notification',
+                        message: 'System settings were updated.',
+                        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+                }
+                if (flashes.includes('database backup created successfully')) {
+                    const now = new Date();
+                    window.publishNotification({
+                        title: 'System Notification',
+                        message: 'Database backup created successfully.',
+                        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+                }
+                if (flashes.includes('database backup failed') || flashes.includes('error creating backup')) {
+                    const now = new Date();
+                    window.publishNotification({
+                        title: 'System Notification',
+                        message: 'Database backup failed. Check configuration.',
+                        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+                }
+            } catch (e) {}
+        });
+        
+        // Notification dropdown (mobile)
+        const notificationBtnMobile = document.getElementById('notification-btn-mobile');
+        const notificationDdMobile = document.getElementById('notification-dd-mobile');
+        const userBtnMobile = document.getElementById('user-btn-mobile');
+        const userDdMobile = document.getElementById('user-dd-mobile');
+        if (notificationBtnMobile && notificationDdMobile) {
+            notificationBtnMobile.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = notificationDdMobile.classList.contains('hidden');
+                const expanded = notificationBtnMobile.getAttribute('aria-expanded') === 'true';
+                notificationDdMobile.classList.toggle('hidden');
+                notificationBtnMobile.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                if (userDdMobile) userDdMobile.classList.add('hidden');
+                
+                // Refresh notifications when dropdown is opened
+                if (isHidden && window.refreshNotifications) {
+                    window.refreshNotifications();
+                }
+            });
+        }
+        if (userBtnMobile && userDdMobile) {
+            userBtnMobile.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const expanded = userBtnMobile.getAttribute('aria-expanded') === 'true';
+                userDdMobile.classList.toggle('hidden');
+                userBtnMobile.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                if (notificationDdMobile) notificationDdMobile.classList.add('hidden');
+            });
+        }
+        
+        // Close dropdowns when clicking outside - optimized without setTimeout
+        document.addEventListener('click', (e) => {
+            // Direct checks without setTimeout for better performance
+            if (userDd && !userDd.contains(e.target) && userBtn && !userBtn.contains(e.target)) {
+                userDd.classList.add('hidden');
+            }
+            if (notificationDd && !notificationDd.contains(e.target) && notificationBtn && !notificationBtn.contains(e.target)) {
+                notificationDd.classList.add('hidden');
+            }
+            if (notificationDdMobile && !notificationDdMobile.contains(e.target) && notificationBtnMobile && !notificationBtnMobile.contains(e.target)) {
+                notificationDdMobile.classList.add('hidden');
+                notificationBtnMobile?.setAttribute('aria-expanded', 'false');
+            }
+            if (userDdMobile && !userDdMobile.contains(e.target) && userBtnMobile && !userBtnMobile.contains(e.target)) {
+                userDdMobile.classList.add('hidden');
+                userBtnMobile?.setAttribute('aria-expanded', 'false');
+            }
+        }, { passive: true });
+        
+        // Close sidebar on window resize if desktop (debounced for performance)
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+            if (window.innerWidth >= 1024) {
+                closeSidebar();
+            }
+            }, 150);
+        });
+        
+        // Mark active sidebar item
+        document.addEventListener('DOMContentLoaded', () => {
+            const currentPath = window.location.pathname;
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                const href = item.getAttribute('href');
+                if (href && (currentPath === href || currentPath.startsWith(href + '/'))) {
+                    item.classList.add('active');
+                }
+            });
+        });
+        
+        // Modal helper functions (available globally)
+        window.openModal = function(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                // Prevent body scroll
+                document.body.style.overflow = 'hidden';
+            }
+        };
+        
+        window.closeModal = function(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('hidden');
+                document.body.classList.remove('modal-open');
+                // Restore body scroll
+                document.body.style.overflow = '';
+            }
+        };
+        
+        // Ensure tables are responsive across pages
+        (function ensureResponsiveTables(){
+            document.addEventListener('DOMContentLoaded', function() {
+                try {
+                    document.querySelectorAll('table').forEach(function(tbl){
+                        const parent = tbl.parentElement;
+                        if (!parent) return;
+                        if (!parent.classList.contains('table-container')) {
+                            const wrapper = document.createElement('div');
+                            wrapper.className = 'table-container';
+                            parent.replaceChild(wrapper, tbl);
+                            wrapper.appendChild(tbl);
+                        }
+                    });
+                } catch(e) {}
+            });
+        })();
+
+        // Close modal on overlay click (backdrop) - optimized with deferred writes
+        document.addEventListener('click', (e) => {
+            // Check if clicking on the modal overlay itself (not the content)
+            if (e.target.classList.contains('modal-overlay') && e.target === e.currentTarget) {
+                const modal = e.target;
+                // Defer DOM writes
+                requestAnimationFrame(() => {
+                    modal.classList.add('hidden');
+                    document.body.classList.remove('modal-open');
+                    document.body.style.overflow = '';
+                });
+            }
+        }, { passive: true });
+        
+        // Close modal on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const openModal = document.querySelector('.modal-overlay:not(.hidden)');
+                if (openModal) {
+                    openModal.classList.add('hidden');
+                    document.body.classList.remove('modal-open');
+                    document.body.style.overflow = '';
+                }
+            }
+        });
+        
+        // Close button handler for modals - optimized with deferred writes
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('close-modal') || e.target.closest('.close-modal')) {
+                const modal = e.target.closest('.modal-overlay') || e.target.closest('[id^="modal-"]')?.closest('.modal-overlay');
+                if (modal) {
+                    // Defer DOM writes
+                    requestAnimationFrame(() => {
+                        modal.classList.add('hidden');
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                    });
+                }
+            }
+        }, { passive: true });
+        
+        // Global loading state utility
+        window.showLoading = function(element) {
+            if (element) {
+                element.disabled = true;
+                const originalText = element.innerHTML;
+                element.dataset.originalText = originalText;
+                element.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading...';
+                element.classList.add('opacity-75', 'cursor-not-allowed');
+            }
+        };
+        
+        window.hideLoading = function(element) {
+            if (element) {
+                element.disabled = false;
+                element.innerHTML = element.dataset.originalText || element.innerHTML;
+                element.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        };
+        
+        // Auto-disable form submission on double-click and add validation
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load form validation script
+            const validationScript = document.createElement('script');
+            validationScript.src = "{{ url_for('static', filename='js/form-validation.js') }}";
+            document.head.appendChild(validationScript);
+            
+            document.querySelectorAll('form').forEach(form => {
+                let isSubmitting = false;
+                
+                form.addEventListener('submit', function(e) {
+                    // Validate form before submission
+                    if (window.formValidation && !window.formValidation.validateForm(form)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+                    
+                    if (isSubmitting) {
+                        e.preventDefault();
+                        return false;
+                    }
+                    isSubmitting = true;
+                    const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+                    if (submitBtn) {
+                        showLoading(submitBtn);
+                    }
+                    // Re-enable after 10 seconds as fallback
+                    setTimeout(() => {
+                        isSubmitting = false;
+                        if (submitBtn) {
+                            hideLoading(submitBtn);
+                        }
+                    }, 10000);
+                });
+            });
+            
+            // Auto-hide flash messages after 5 seconds - optimized with requestAnimationFrame
+            const flashMessages = document.querySelectorAll('.flash-message, [class*="flash"]');
+            flashMessages.forEach(msg => {
+                // Use requestIdleCallback for better performance, fallback to setTimeout
+                const hideMessage = () => {
+                    msg.style.transition = 'opacity 0.5s ease-out';
+                    msg.style.opacity = '0';
+                    setTimeout(() => {
+                        if (msg.parentNode) {
+                            msg.remove();
+                        }
+                    }, 500);
+                };
+                
+                if (window.requestIdleCallback) {
+                    requestIdleCallback(hideMessage, { timeout: 5000 });
+                } else {
+                    setTimeout(hideMessage, 5000);
+                }
+            });
+        });
+    </script>
+    
+    <div id="global-confirm-modal" class="modal-overlay hidden">
+        <div class="modal-content max-w-lg">
+            <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 z-10">
+                <h3 class="text-lg sm:text-xl font-bold">Please Confirm</h3>
+                <button onclick="confirmModalCancel()" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            <div class="p-4 sm:p-6">
+                <p id="global-confirm-message" class="text-sm text-gray-300 mb-4">Are you sure?</p>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="confirmModalCancel()" class="px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium">Cancel</button>
+                    <button type="button" id="global-confirm-btn" onclick="confirmModalSubmit()" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    window._confirmFormToSubmit = null;
+    window._confirmCallback = null;
+    window.openConfirmOnFormSubmit = function(form, msg) {
+        window._confirmFormToSubmit = form;
+        window._confirmCallback = null;
+        var el = document.getElementById('global-confirm-message');
+        if (el) el.textContent = msg || 'Are you sure?';
+        var modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+        return false;
+    };
+    window.openConfirmWithCallback = function(cb, msg) {
+        window._confirmCallback = cb;
+        window._confirmFormToSubmit = null;
+        var el = document.getElementById('global-confirm-message');
+        if (el) el.textContent = msg || 'Are you sure?';
+        var modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window._confirmModifiedButton = null;
+    window.confirmModalSubmit = function() {
+        try {
+            if (window._confirmCallback && typeof window._confirmCallback === 'function') {
+                window._confirmCallback();
+                window._confirmCallback = null;
+            } else if (window._confirmFormToSubmit) {
+                var f = window._confirmFormToSubmit;
+                window._confirmFormToSubmit = null;
+                try {
+                    if (!f.hasAttribute('data-no-loading')) {
+                        var btn = f.querySelector('button[type=submit], input[type=submit]');
+                        if (btn) {
+                            btn.disabled = true;
+                            if (btn.tagName.toLowerCase() === 'button') btn.dataset.origHtml = btn.innerHTML;
+                            btn.innerHTML = '<span class="spinner-border" style="width:1rem;height:1rem;display:inline-block;vertical-align:middle;margin-right:.5rem;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin 0.75s linear infinite"></span>Loading...';
+                            btn.dataset.wasLoadingApplied = '1';
+                            window._confirmModifiedButton = btn;
+                        }
+                    }
+                } catch(e) { console.error(e); }
+                setTimeout(function() { f.submit(); }, 80);
+            }
+        } catch (e) {
+            console.error('Confirm modal submit error:', e);
+        }
+        confirmModalCancel();
+    };
+    window.confirmModalCancel = function() {
+        try {
+            // restore any button we modified
+            if (window._confirmModifiedButton) {
+                try {
+                    var b = window._confirmModifiedButton;
+                    if (b.dataset.origHtml) b.innerHTML = b.dataset.origHtml;
+                    b.disabled = false;
+                    delete b.dataset.origHtml;
+                    delete b.dataset.wasLoadingApplied;
+                } catch(e) { console.error('Restore button error', e); }
+                window._confirmModifiedButton = null;
+            }
+        } catch(e) { console.error(e); }
+        window._confirmFormToSubmit = null;
+        window._confirmCallback = null;
+        var modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.add('hidden');
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+    };
+    </script>
+    <script>
+    // Global flash message helper (admin) - mirrors HR implementation
+    if (typeof window.showFlashMessage !== 'function') {
+        window.showFlashMessage = function(message, type) {
+            try {
+                var flashContainer = document.createElement('div');
+                flashContainer.className = 'global-flash fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2';
+                flashContainer.style.transition = 'opacity 0.3s ease';
+                flashContainer.style.opacity = '1';
+                flashContainer.style.pointerEvents = 'auto';
+                flashContainer.style.display = 'flex';
+                if (type === 'success') {
+                    flashContainer.style.background = '#16a34a';
+                    flashContainer.style.color = '#fff';
+                } else {
+                    flashContainer.style.background = '#dc2626';
+                    flashContainer.style.color = '#fff';
+                }
+                flashContainer.innerHTML = '<span style="font-weight:600;margin-right:.5rem">' + (type === 'success' ? '✔' : '⚠') + '</span><span>' + (message || '') + '</span>';
+                document.body.appendChild(flashContainer);
+                setTimeout(function() {
+                    flashContainer.style.opacity = '0';
+                    setTimeout(function(){ try{ flashContainer.remove(); }catch(e){} }, 300);
+                }, 3000);
+            } catch (e) { console.error('showFlashMessage error', e); }
+        };
+    }
+    </script>
+    <script>
+    // Global handler: intercept submits for archive forms and follow JSON redirects (admin side)
+    document.addEventListener('submit', function(e){
+        try{
+            var form = e.target;
+            if (!form || !form.action) return;
+            if (form.action.indexOf('/archive') === -1) return;
+            e.preventDefault();
+            var submitBtn = form.querySelector('button[type=submit], input[type=submit]');
+            var origHtml = submitBtn && submitBtn.innerHTML;
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Loading...'; }
+            fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+            }).then(function(resp){
+                var ct = resp.headers.get('content-type') || '';
+                if (resp.ok && ct.indexOf('application/json') !== -1) return resp.json();
+                if (resp.redirected) { window.location.href = resp.url; return null; }
+                return resp.text().then(function(text){ return { success: true }; });
+            }).then(function(data){
+                if (!data) return;
+                // Prefer server-provided redirect but fall back to form's data-redirect attribute
+                var redirectTarget = (data && data.redirect) || (form.dataset && form.dataset.redirect);
+                if (redirectTarget) { window.location.href = redirectTarget; return; }
+                if (data && data.success) { window.showFlashMessage(data.message || 'Application archived.', 'success'); var row = form.closest('tr.applicant-row'); if (row) row.remove(); }
+                else { window.showFlashMessage((data && data.error) || 'Failed to archive application.', 'error'); }
+            }).catch(function(err){ console.error('Archive submit handler (admin) error', err); window.showFlashMessage('Failed to archive application.', 'error'); })
+            .finally(function(){ if (submitBtn) { submitBtn.disabled = false; if (origHtml) submitBtn.innerHTML = origHtml; } });
+        }catch(e){ console.error('Archive submit interception (admin)', e); }
+    }, { capture: false });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

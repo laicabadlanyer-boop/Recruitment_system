@@ -1,0 +1,1077 @@
+{% extends "applicant/_base.html" %}
+
+{% block title %}Apply • Applicant{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-input {
+        width: 100%;
+        border-radius: 1rem;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(15, 23, 42, 0.65);
+        padding: 0.9rem 1.1rem;
+        color: #e2e8f0;
+    }
+    .form-input:focus {
+        outline: none;
+        border-color: rgba(248, 113, 113, 0.6);
+        box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.1);
+    }
+    
+    /* Job Details Styling */
+    .job-detail-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .job-detail-item i {
+        width: 20px;
+        color: #94a3b8;
+    }
+    .job-detail-item span {
+        color: #e2e8f0;
+        font-size: 0.9rem;
+    }
+    
+    /* File Upload Drop Zone */
+    .file-drop-zone {
+        border: 2px dashed rgba(148, 163, 184, 0.3);
+        border-radius: 1rem;
+        background: rgba(15, 23, 42, 0.3);
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        min-height: 150px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .file-drop-zone:hover, .file-drop-zone.dragover {
+        border-color: rgba(248, 113, 113, 0.6);
+        background: rgba(248, 113, 113, 0.05);
+    }
+    .file-drop-zone i {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        color: rgba(148, 163, 184, 0.6);
+    }
+    .file-drop-zone.dragover i {
+        color: rgba(248, 113, 113, 0.8);
+    }
+    
+    /* Uploaded Files List */
+    .uploaded-files-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .uploaded-file-item {
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 0.75rem;
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.2s ease;
+    }
+    .uploaded-file-item:hover {
+        background: rgba(30, 41, 59, 0.7);
+        border-color: rgba(248, 113, 113, 0.3);
+    }
+    .uploaded-file-item .file-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.5);
+        border-radius: 0.5rem;
+        margin-right: 0.75rem;
+    }
+    .uploaded-file-item .file-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .uploaded-file-item .file-name {
+        font-weight: 500;
+        color: #e2e8f0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .uploaded-file-item .file-size {
+        font-size: 0.75rem;
+        color: #94a3b8;
+    }
+    .uploaded-file-item .file-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .file-action-btn {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.5rem;
+        background: rgba(15, 23, 42, 0.5);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        color: #94a3b8;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .file-action-btn:hover {
+        background: rgba(15, 23, 42, 0.8);
+        border-color: rgba(248, 113, 113, 0.3);
+        color: #f8fafc;
+    }
+    .file-action-btn.preview:hover {
+        color: #60a5fa;
+        border-color: rgba(96, 165, 250, 0.3);
+    }
+    .file-action-btn.remove:hover {
+        color: #f87171;
+        border-color: rgba(248, 113, 113, 0.3);
+    }
+    
+    /* Preview Modal */
+    .preview-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    .preview-modal.active {
+        opacity: 1;
+        visibility: visible;
+    }
+    .preview-content {
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 1rem;
+        width: 100%;
+        max-width: 900px;
+        max-height: 90vh;
+        overflow: hidden;
+        position: relative;
+        transform: translateY(20px);
+        transition: transform 0.3s ease;
+    }
+    .preview-modal.active .preview-content {
+        transform: translateY(0);
+    }
+    .preview-header {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .preview-body {
+        padding: 1.5rem;
+        max-height: calc(90vh - 120px);
+        overflow-y: auto;
+    }
+    .preview-body iframe {
+        width: 100%;
+        height: 600px;
+        border: none;
+        border-radius: 0.5rem;
+    }
+    .preview-body .unsupported-file {
+        text-align: center;
+        padding: 3rem;
+        color: #94a3b8;
+    }
+    
+    /* File Type Colors */
+    .file-icon.pdf { color: #ef4444; }
+    .file-icon.doc, .file-icon.docx { color: #3b82f6; }
+    .file-icon.jpg, .file-icon.jpeg, .file-icon.png { color: #10b981; }
+    .file-icon.txt { color: #6b7280; }
+    .file-icon.zip { color: #f59e0b; }
+    
+    /* Job Information Section */
+    .job-info-section {
+        border-left: 3px solid rgba(248, 113, 113, 0.5);
+        padding-left: 1rem;
+        margin-top: 1rem;
+    }
+    .job-info-section h3 {
+        color: #f8fafc;
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .job-info-section h3 i {
+        color: rgba(248, 113, 113, 0.8);
+    }
+    .job-info-section p {
+        color: #cbd5e1;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-bottom: 1rem;
+    }
+    .job-info-section ul {
+        list-style-type: none;
+        padding-left: 1rem;
+        margin-bottom: 1rem;
+    }
+    .job-info-section ul li {
+        color: #cbd5e1;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-bottom: 0.5rem;
+        position: relative;
+        padding-left: 1.5rem;
+    }
+    .job-info-section ul li:before {
+        content: "•";
+        color: rgba(248, 113, 113, 0.8);
+        position: absolute;
+        left: 0;
+        font-size: 1.2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set job = job or None %}
+{% set jobs = jobs or [] %}
+<section class="space-y-6">
+    <header class="glass-panel rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+            <p class="text-xs uppercase tracking-[0.4em] text-slate-400">{{ 'Update application' if edit_application_id else 'New application' }}</p>
+            <h1 class="text-3xl font-semibold text-white">
+                {{ job.job_title if job else 'Select a job' }}
+            </h1>
+            {% if job %}
+            <div class="flex flex-wrap gap-4 mt-3">
+                <div class="job-detail-item">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>{{ job.branch_name }}</span>
+                </div>
+                {% if job.department %}
+                <div class="job-detail-item">
+                    <i class="fas fa-building"></i>
+                    <span>{{ job.department }}</span>
+                </div>
+                {% endif %}
+                {% if job.job_type %}
+                <div class="job-detail-item">
+                    <i class="fas fa-briefcase"></i>
+                    <span>{{ job.job_type }}</span>
+                </div>
+                {% endif %}
+                {% if job.salary_range %}
+                <div class="job-detail-item">
+                    <i class="fas fa-money-bill-wave"></i>
+                    <span>{{ job.salary_range }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('jobs') }}" class="px-5 py-3 rounded-2xl border border-white/20 text-sm font-semibold text-white/80 hover:text-white">
+            <i class="fas fa-arrow-left mr-2"></i>Back to jobs
+        </a>
+    </header>
+
+    {% if job %}
+    <!-- Job Information Section (moved here from bottom) -->
+    <section class="glass-panel rounded-3xl p-6 border border-white/10 space-y-6">
+        <!-- Job Description -->
+        {% if job.job_description %}
+        <div class="job-info-section">
+            <h3><i class="fas fa-align-left"></i>Job Description</h3>
+            <p class="text-slate-300 whitespace-pre-line">{{ job.job_description }}</p>
+        </div>
+        {% endif %}
+        
+        <!-- Job Requirements -->
+        {% if job.job_requirements %}
+        <div class="job-info-section">
+            <h3><i class="fas fa-list-check"></i>Requirements</h3>
+            {% if job.job_requirements|length > 1 or ',' in job.job_requirements %}
+                {% set requirements = job.job_requirements.split('\n') if '\n' in job.job_requirements else job.job_requirements.split(',') %}
+                <ul>
+                    {% for req in requirements %}
+                        {% set trimmed_req = req|trim %}
+                        {% if trimmed_req %}
+                            <li>{{ trimmed_req }}</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-slate-300 whitespace-pre-line">{{ job.job_requirements }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Responsibilities (if available) -->
+        {% if job.responsibilities %}
+        <div class="job-info-section">
+            <h3><i class="fas fa-tasks"></i>Responsibilities</h3>
+            {% if job.responsibilities|length > 1 or ',' in job.responsibilities %}
+                {% set responsibilities = job.responsibilities.split('\n') if '\n' in job.responsibilities else job.responsibilities.split(',') %}
+                <ul>
+                    {% for resp in responsibilities %}
+                        {% set trimmed_resp = resp|trim %}
+                        {% if trimmed_resp %}
+                            <li>{{ trimmed_resp }}</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-slate-300 whitespace-pre-line">{{ job.responsibilities }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Qualifications (if available) -->
+        {% if job.qualifications %}
+        <div class="job-info-section">
+            <h3><i class="fas fa-graduation-cap"></i>Qualifications</h3>
+            {% if job.qualifications|length > 1 or ',' in job.qualifications %}
+                {% set qualifications = job.qualifications.split('\n') if '\n' in job.qualifications else job.qualifications.split(',') %}
+                <ul>
+                    {% for qual in qualifications %}
+                        {% set trimmed_qual = qual|trim %}
+                        {% if trimmed_qual %}
+                            <li>{{ trimmed_qual }}</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-slate-300 whitespace-pre-line">{{ job.qualifications }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    <!-- Application Form Section -->
+    <section class="glass-panel rounded-3xl p-6 border border-white/10 space-y-6">
+        <form id="apply-form" method="post" action="{{ url_for('apply_to_job', job_id=job.job_id if job else None) }}" enctype="multipart/form-data" class="space-y-5">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if edit_application_id %}
+            <input type="hidden" name="edit_application_id" value="{{ edit_application_id }}">
+            {% endif %}
+            
+            <!-- Job Selection -->
+            {% if edit_application_id or job %}
+            <div>
+                <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Selected Position</p>
+                <div class="mt-2 p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 text-white">
+                    <p class="font-semibold text-lg">{{ job.job_title if job else 'N/A' }}</p>
+                    <div class="flex items-center gap-2 mt-2">
+                        <i class="fas fa-map-marker-alt text-slate-400 text-sm"></i>
+                        <p class="text-sm text-slate-300">{{ job.branch_name if job else '' }}</p>
+                    </div>
+                </div>
+                <input type="hidden" name="job_id" value="{{ job.job_id if job else '' }}">
+            </div>
+            {% else %}
+            <div>
+                <label for="job-select" class="text-xs uppercase tracking-[0.3em] text-slate-500">Select job</label>
+                <select id="job-select" name="job_id" class="form-input mt-2" required>
+                    <option value="">Choose a job position</option>
+                    {% for option in jobs %}
+                    <option value="{{ option.job_id }}">
+                        {{ option.job_title }} • {{ option.branch_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <!-- File Upload Section -->
+            <div>
+                <p class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-3">Upload Documents</p>
+                <p class="text-sm text-slate-400 mb-4">Upload all required documents for your application (No file limit)</p>
+                
+                <!-- File Drop Zone -->
+                <div id="file-drop-zone" class="file-drop-zone">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p class="text-lg font-medium text-white mb-2">Drag & drop files here</p>
+                    <p class="text-sm text-slate-400">or click to browse</p>
+                    <p class="text-xs text-slate-500 mt-2">Supported: PDF, DOC, DOCX, JPG, PNG (Max 50MB each)</p>
+                </div>
+                
+                <!-- Hidden File Input -->
+                <input type="file" id="file-input" class="hidden" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,text/plain,application/zip">
+                
+                <!-- Uploaded Files List -->
+                <div id="uploaded-files-section" class="mt-6">
+                    <div class="flex justify-between items-center mb-3">
+                        <p class="text-sm font-medium text-white">Uploaded Files (<span id="file-count">0</span>)</p>
+                        <button type="button" id="clear-all-btn" class="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <i class="fas fa-trash-alt mr-1"></i>Clear All
+                        </button>
+                    </div>
+                    <div id="uploaded-files-list" class="uploaded-files-list">
+                        <!-- Files will be added here dynamically -->
+                        <div class="text-center py-8 text-slate-500" id="no-files-message">
+                            <i class="fas fa-inbox text-3xl mb-3"></i>
+                            <p>No files uploaded yet</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Error Message -->
+                <div id="upload-error" class="mt-3 p-3 bg-red-900/30 border border-red-700/50 rounded-lg hidden">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-circle text-red-400 mr-2"></i>
+                        <p class="text-red-300 text-sm" id="upload-error-text"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-4">
+                {% if edit_application_id and application_viewed %}
+                <div class="mb-3 p-3 rounded-lg bg-yellow-900/30 border border-yellow-800/20 text-sm text-yellow-200">
+                    This application has already been viewed by HR and cannot be updated.
+                </div>
+                <button id="submit-apply-btn" type="button" class="w-full px-6 py-3 rounded-2xl bg-slate-700 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed" title="Cannot update - already viewed by HR" aria-disabled="true" disabled>
+                    {{ 'Update application' if edit_application_id else 'Submit application' }}
+                </button>
+                {% else %}
+                <button id="submit-apply-btn" type="submit" class="w-full px-6 py-3 rounded-2xl bg-rose-500/80 hover:bg-rose-500 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    {{ 'Update application' if edit_application_id else 'Submit application' }}
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </section>
+</section>
+
+    <!-- File Preview Modal -->
+    <div id="preview-modal" class="preview-modal">
+        <div class="preview-content">
+            <div class="preview-header">
+                <h3 class="text-lg font-semibold text-white" id="preview-title">File Preview</h3>
+                <button type="button" id="close-preview" class="file-action-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="preview-body">
+                <iframe id="preview-iframe" src="about:blank"></iframe>
+                <div id="unsupported-preview" class="unsupported-file hidden">
+                    <i class="fas fa-file text-5xl mb-4"></i>
+                    <p class="text-lg mb-2">Preview not available</p>
+                    <p class="text-sm text-slate-400 mb-4">This file type cannot be previewed in the browser</p>
+                    <div id="unsupported-actions" class="flex flex-col items-center gap-3">
+                        <a id="unsupported-download" class="px-4 py-2 rounded-lg bg-white/10 text-white text-sm font-semibold hover:bg-white/20" href="#" target="_blank">Download file</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Server-provided attachments when editing an application
+    const initialAttachments = {{ attached_files|tojson|safe if attached_files is defined else '[]' }};
+    const form = document.getElementById('apply-form');
+    const fileDropZone = document.getElementById('file-drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const uploadedFilesList = document.getElementById('uploaded-files-list');
+    const noFilesMessage = document.getElementById('no-files-message');
+    const fileCountSpan = document.getElementById('file-count');
+    const clearAllBtn = document.getElementById('clear-all-btn');
+    const uploadError = document.getElementById('upload-error');
+    const uploadErrorText = document.getElementById('upload-error-text');
+    const submitBtn = document.getElementById('submit-apply-btn');
+    const previewModal = document.getElementById('preview-modal');
+    const previewIframe = document.getElementById('preview-iframe');
+    const unsupportedPreview = document.getElementById('unsupported-preview');
+    const closePreviewBtn = document.getElementById('close-preview');
+    const previewTitle = document.getElementById('preview-title');
+    // Whether this application has already been viewed by HR (server-side flag)
+    const applicationViewed = {{ 'true' if (application_viewed|default(False)) else 'false' }};
+    
+    // Store uploaded files
+    let uploadedFiles = [];
+    let fileIdCounter = 1;
+    let serverIdCounter = -1; // negative ids for server-provided files
+
+    // Initialize with server attachments (if any)
+    if (initialAttachments && initialAttachments.length) {
+        initialAttachments.forEach(a => {
+            const id = serverIdCounter--;
+                uploadedFiles.push({
+                id: id,
+                file: null,
+                name: a.file_name,
+                size: a.file_size_bytes || 0,
+                type: a.file_type || '',
+                extension: (a.file_name && a.file_name.includes('.')) ? '.' + a.file_name.split('.').pop().toLowerCase() : '',
+                    // Normalize preview URL to a relative path so iframe uses same host/port
+                    previewUrl: (function(){
+                        const raw = a.preview_url || a.download_url || null;
+                        if (!raw) return null;
+                        try {
+                            const u = new URL(raw, window.location.href);
+                            // Ensure a leading slash path (no host) so we can prepend origin later
+                            return u.pathname + (u.search || '') + (u.hash || '');
+                        } catch (e) {
+                            return raw;
+                        }
+                    })(),
+                serverResumeId: a.resume_id
+            });
+
+            // Create hidden input so backend links this resume unless removed
+            try {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'resume_id';
+                input.value = a.resume_id;
+                input.dataset.fileId = id;
+                form.appendChild(input);
+            } catch (e) {
+                console.warn('Could not create hidden input for attached file', e);
+            }
+        });
+    }
+    
+    // Allowed file types and max size (50MB per file)
+    const ALLOWED_TYPES = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg',
+        'image/png',
+        'text/plain',
+        'application/zip'
+    ];
+    const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+    
+    // File type icons mapping
+    const FILE_ICONS = {
+        'pdf': 'fas fa-file-pdf',
+        'doc': 'fas fa-file-word',
+        'docx': 'fas fa-file-word',
+        'jpg': 'fas fa-file-image',
+        'jpeg': 'fas fa-file-image',
+        'png': 'fas fa-file-image',
+        'txt': 'fas fa-file-alt',
+        'zip': 'fas fa-file-archive',
+        'default': 'fas fa-file'
+    };
+    
+    // File type colors mapping
+    const FILE_COLORS = {
+        'pdf': 'text-red-500',
+        'doc': 'text-blue-500',
+        'docx': 'text-blue-500',
+        'jpg': 'text-green-500',
+        'jpeg': 'text-green-500',
+        'png': 'text-green-500',
+        'txt': 'text-gray-500',
+        'zip': 'text-yellow-500',
+        'default': 'text-slate-500'
+    };
+    
+    // Click on drop zone to trigger file input
+    fileDropZone.addEventListener('click', () => {
+        fileInput.click();
+    });
+    
+    // Handle file input change
+    fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+        fileInput.value = ''; // Reset input
+    });
+    
+    // Drag and drop functionality
+    fileDropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fileDropZone.classList.add('dragover');
+    });
+    
+    fileDropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        fileDropZone.classList.remove('dragover');
+    });
+    
+    fileDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileDropZone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+    
+    // Clear all files
+    clearAllBtn.addEventListener('click', () => {
+        if (uploadedFiles.length > 0) {
+            if (confirm('Are you sure you want to remove all uploaded files?')) {
+                uploadedFiles = [];
+                updateFilesList();
+            }
+        }
+    });
+    
+    // Close preview modal
+    closePreviewBtn.addEventListener('click', () => {
+        previewModal.classList.remove('active');
+        previewIframe.src = 'about:blank';
+    });
+    
+    // Close modal when clicking outside
+    previewModal.addEventListener('click', (e) => {
+        if (e.target === previewModal) {
+            previewModal.classList.remove('active');
+            previewIframe.src = 'about:blank';
+        }
+    });
+    
+    // Handle files (from input or drag & drop)
+    function handleFiles(files) {
+        hideError();
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            
+            // Validate file type
+            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+            const isValidType = ALLOWED_TYPES.includes(file.type) || 
+                               ALLOWED_EXTENSIONS.includes(fileExtension);
+            
+            if (!isValidType) {
+                showError(`File type not supported: ${file.name}. Supported types: ${ALLOWED_EXTENSIONS.join(', ')}`);
+                continue;
+            }
+            
+            // Validate file size
+            if (file.size > MAX_FILE_SIZE) {
+                showError(`File too large: ${file.name}. Maximum size is 50MB.`);
+                continue;
+            }
+            
+            // Check for duplicate file names
+            if (uploadedFiles.some(f => f.name === file.name)) {
+                showError(`File already uploaded: ${file.name}`);
+                continue;
+            }
+            
+            // Add file to uploaded files
+            const fileId = fileIdCounter++;
+            uploadedFiles.push({
+                id: fileId,
+                file: file,
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                extension: fileExtension,
+                previewUrl: null
+            });
+        }
+        
+        updateFilesList();
+    }
+    
+    // Update files list UI
+    function updateFilesList() {
+        // Update file count
+        fileCountSpan.textContent = uploadedFiles.length;
+        
+        // Show/hide clear all button
+        clearAllBtn.disabled = uploadedFiles.length === 0;
+        
+        // Enable/disable submit button (require at least 1 file)
+        submitBtn.disabled = uploadedFiles.length === 0 || applicationViewed;
+        
+        // Show/hide no files message
+        if (uploadedFiles.length === 0) {
+            noFilesMessage.classList.remove('hidden');
+            uploadedFilesList.innerHTML = '';
+            uploadedFilesList.appendChild(noFilesMessage);
+        } else {
+            noFilesMessage.classList.add('hidden');
+            
+            // Clear and rebuild files list
+            uploadedFilesList.innerHTML = '';
+            
+            uploadedFiles.forEach(fileData => {
+                const fileElement = createFileElement(fileData);
+                uploadedFilesList.appendChild(fileElement);
+            });
+        }
+    }
+    
+    // Create file element for the list
+    function createFileElement(fileData) {
+        const fileExtension = fileData.extension.replace('.', '').toLowerCase();
+        const fileIcon = FILE_ICONS[fileExtension] || FILE_ICONS.default;
+        const fileColor = FILE_COLORS[fileExtension] || FILE_COLORS.default;
+        const fileSize = formatFileSize(fileData.size);
+        
+        const div = document.createElement('div');
+        div.className = 'uploaded-file-item flex items-center';
+        div.dataset.fileId = fileData.id;
+        
+        div.innerHTML = `
+            <div class="file-icon ${fileColor}">
+                <i class="${fileIcon}"></i>
+            </div>
+            <div class="file-info flex-1">
+                <div class="file-name">${fileData.name}</div>
+                <div class="file-size">${fileSize} • ${fileExtension.toUpperCase()}</div>
+            </div>
+            <div class="file-actions">
+                <button type="button" class="file-action-btn preview" data-action="preview" data-file-id="${fileData.id}">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button type="button" class="file-action-btn remove" data-action="remove" data-file-id="${fileData.id}">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        // Add event listeners to buttons
+        const previewBtn = div.querySelector('[data-action="preview"]');
+        const removeBtn = div.querySelector('[data-action="remove"]');
+
+        previewBtn.addEventListener('click', () => previewFile(fileData));
+        removeBtn.addEventListener('click', () => removeFile(fileData.id));
+
+        // If this entry is a server-side file, add a small label
+        if (fileData.serverResumeId) {
+            const label = document.createElement('div');
+            label.className = 'text-xs text-slate-400 mt-1';
+            label.textContent = 'Previously uploaded';
+            div.querySelector('.file-info').appendChild(label);
+        }
+
+        return div;
+    }
+    
+    // Preview file
+    function previewFile(fileData) {
+        const fileExtension = fileData.extension.replace('.', '').toLowerCase();
+        
+        // Set preview title
+        previewTitle.textContent = fileData.name;
+        
+        // Check if file can be previewed in iframe
+        const previewableTypes = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'txt'];
+        
+        // If a local DOC/DOCX file without a server preview exists, upload it to get a preview URL
+        if (!fileData.serverResumeId && fileData.file && (fileExtension === 'doc' || fileExtension === 'docx')) {
+            const fd = new FormData();
+            fd.append('resume_file', fileData.file, fileData.name);
+            fd.append('file_type', 'resume');
+            try {
+                const jobIdInput = form.querySelector('input[name="job_id"]');
+                if (jobIdInput && jobIdInput.value) fd.append('job_id', jobIdInput.value);
+                const csrf = form.querySelector('input[name="csrf_token"]');
+                if (csrf && csrf.value) fd.append('csrf_token', csrf.value);
+            } catch (_) {}
+            fetch('/applicant/upload-resume', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd
+            }).then(async resp => {
+                let data = null;
+                try { data = await resp.json(); } catch (_) {}
+                if (resp.ok && data && data.success && data.resume_id) {
+                    fileData.serverResumeId = data.resume_id;
+                    fileData.previewUrl = `/applicant/resumes/${data.resume_id}/view`;
+                    try {
+                        const hidden = document.createElement('input');
+                        hidden.type = 'hidden';
+                        hidden.name = 'resume_id';
+                        hidden.value = String(data.resume_id);
+                        hidden.dataset.fileId = String(fileData.id);
+                        form.appendChild(hidden);
+                    } catch (_) {}
+                }
+            }).catch(() => {}).finally(() => {
+                // proceed to preview using server URL if available after upload
+                if (fileData.previewUrl) {
+                    previewIframe.classList.remove('hidden');
+                    unsupportedPreview.classList.add('hidden');
+                    previewIframe.src = fileData.previewUrl;
+                    previewModal.classList.add('active');
+                    return;
+                }
+                // fallback to unsupported notification
+                previewIframe.classList.add('hidden');
+                unsupportedPreview.classList.remove('hidden');
+                previewModal.classList.add('active');
+            });
+            return;
+        }
+        
+        if (previewableTypes.includes(fileExtension)) {
+            // If client-side File object exists, use object URL, else use server preview URL
+            if (fileData.file) {
+                if (!fileData.previewUrl) {
+                    fileData.previewUrl = URL.createObjectURL(fileData.file);
+                }
+
+                // Show iframe and hide unsupported message
+                previewIframe.classList.remove('hidden');
+                unsupportedPreview.classList.add('hidden');
+
+                if (fileExtension === 'txt') {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const content = e.target.result;
+                        previewIframe.srcdoc = `<!DOCTYPE html><html><head><style>body{font-family:monospace;white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:20px;margin:0;}</style></head><body>${content}</body></html>`;
+                    };
+                    reader.readAsText(fileData.file);
+                } else {
+                    previewIframe.src = fileData.previewUrl;
+                }
+                } else if (fileData.previewUrl) {
+                // Server-provided URL - use relative path when possible.
+                previewIframe.classList.remove('hidden');
+                unsupportedPreview.classList.add('hidden');
+                try {
+                    console.log('Preview debug:', {previewUrl: fileData.previewUrl, locationHref: window.location.href, locationOrigin: window.location.origin});
+                    let src = fileData.previewUrl || '';
+
+                    // Attach an onerror handler to attempt fallbacks if the first load fails
+                    previewIframe.onerror = function(ev) {
+                        console.warn('Preview iframe failed to load:', ev, 'current src=', previewIframe.src);
+                        // Try absolute origin + path if src was relative
+                        try {
+                            if (src && src.startsWith('/')) {
+                                const alt = window.location.origin + src;
+                                if (previewIframe.src !== alt) {
+                                    console.log('Retrying preview with origin prefix:', alt);
+                                    previewIframe.src = alt;
+                                    return;
+                                }
+                            }
+                            // As a last resort, try forcing http://localhost with current port
+                            try {
+                                const port = window.location.port ? (':' + window.location.port) : '';
+                                const localhostAlt = window.location.protocol + '//' + 'localhost' + port + src;
+                                if (previewIframe.src !== localhostAlt) {
+                                    console.log('Retrying preview with localhost prefix:', localhostAlt);
+                                    previewIframe.src = localhostAlt;
+                                    return;
+                                }
+                            } catch (inner) {
+                                console.warn('Localhost prefix retry failed', inner);
+                            }
+                        } catch (e2) {
+                            console.warn('Preview iframe onerror handler exception', e2);
+                        }
+                        // If all retries fail, show unsupported message and provide download link
+                        previewIframe.classList.add('hidden');
+                        unsupportedPreview.classList.remove('hidden');
+                        if (fileData.serverResumeId) {
+                            const dl = document.getElementById('unsupported-download');
+                            if (dl) dl.href = '/applicant/resumes/' + fileData.serverResumeId + '/download';
+                        }
+                    };
+
+                    // Set src: prefer relative path so the browser uses current host
+                    if (src.startsWith('/')) {
+                        previewIframe.src = src;
+                    } else if (src.startsWith('http')) {
+                        // Absolute URL - try as-is
+                        previewIframe.src = src;
+                    } else {
+                        // Fallback: treat as relative
+                        previewIframe.src = '/' + src;
+                    }
+                } catch (e) {
+                    console.warn('Exception setting preview iframe src', e);
+                    previewIframe.src = fileData.previewUrl;
+                }
+            } else {
+                previewIframe.classList.add('hidden');
+                unsupportedPreview.classList.remove('hidden');
+            }
+            } else {
+                // Show unsupported message
+                previewIframe.classList.add('hidden');
+                unsupportedPreview.classList.remove('hidden');
+                // If server-side file, provide a download link
+                if (fileData.serverResumeId) {
+                    const dl = document.getElementById('unsupported-download');
+                    if (dl) {
+                        dl.href = `/applicant/resumes/${fileData.serverResumeId}/download`;
+                        dl.classList.remove('hidden');
+                    }
+                }
+            }
+        
+        // Show modal
+        previewModal.classList.add('active');
+    }
+    
+    // Remove file
+    function removeFile(fileId) {
+        const fileIndex = uploadedFiles.findIndex(f => f.id === fileId);
+        if (fileIndex !== -1) {
+            // Revoke object URL if exists
+            if (uploadedFiles[fileIndex].previewUrl) {
+                URL.revokeObjectURL(uploadedFiles[fileIndex].previewUrl);
+            }
+            // If this was a server-provided file, remove its hidden input so it's not linked
+            const serverId = uploadedFiles[fileIndex].serverResumeId;
+            if (serverId) {
+                const hidden = form.querySelector(`input[name="resume_id"][data-file-id="${fileId}"]`);
+                if (hidden) hidden.remove();
+            }
+
+            uploadedFiles.splice(fileIndex, 1);
+            updateFilesList();
+        }
+    }
+    
+    // Format file size
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    // Show error message
+    function showError(message) {
+        uploadErrorText.textContent = message;
+        uploadError.classList.remove('hidden');
+    }
+    
+    // Hide error message
+    function hideError() {
+        uploadError.classList.add('hidden');
+        uploadErrorText.textContent = '';
+    }
+    
+    // Handle form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        // Prevent submission if application was viewed by HR (server-side enforced)
+        if (applicationViewed) {
+            showError('This application has already been viewed by HR and cannot be updated.');
+            return;
+        }
+        
+        // Disable submit button during processing
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+        
+        try {
+            // Create FormData
+            const formData = new FormData(form);
+            
+            // Add all files to FormData
+            uploadedFiles.forEach((fileData, index) => {
+                formData.append(`file_${index}`, fileData.file);
+                formData.append(`file_name_${index}`, fileData.name);
+                formData.append(`file_type_${index}`, fileData.type);
+            });
+            
+            // Add total file count
+            formData.append('total_files', uploadedFiles.length);
+            
+            // Submit form via fetch
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+
+            // If server performed a redirect (HTML page returned), follow it in the browser
+            if (response.redirected) {
+                window.location.href = response.url;
+                return;
+            }
+
+            // Determine response type: JSON expected, but server may return HTML (redirected page)
+            const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
+            if (contentType.includes('application/json')) {
+                const result = await response.json();
+                if (result && result.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Application Submitted!',
+                        text: 'Your application has been submitted successfully.',
+                        confirmButtonColor: '#dc2626',
+                        confirmButtonText: 'View Applications'
+                    }).then((r) => {
+                        if (r.isConfirmed) {
+                            window.location.href = "{{ url_for('applicant_applications') }}";
+                        }
+                    });
+                    return;
+                } else {
+                    showError((result && result.message) || 'Submission failed. Please try again.');
+                    if (!applicationViewed) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '{{ "Update application" if edit_application_id else "Submit application" }}';
+                    } else {
+                        // keep disabled and show message
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '{{ "Update application" if edit_application_id else "Submit application" }}';
+                    }
+                    return;
+                }
+            }
+
+            // Fallback: assume server returned an HTML page (likely a redirect target)
+            try {
+                // Prefer to use the final URL if present
+                if (response.url) {
+                    window.location.href = response.url;
+                    return;
+                }
+            } catch (e) {}
+
+            // Last resort: navigate to applications page
+            window.location.href = "{{ url_for('applicant_applications') }}";
+            
+        } catch (error) {
+            console.error('Error submitting form:', error);
+            showError('An error occurred while submitting your application. Please try again.');
+            if (!applicationViewed) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '{{ "Update application" if edit_application_id else "Submit application" }}';
+            }
+        }
+    });
+    
+    // Clean up object URLs when page unloads
+    window.addEventListener('beforeunload', () => {
+        uploadedFiles.forEach(fileData => {
+            if (fileData.previewUrl) {
+                URL.revokeObjectURL(fileData.previewUrl);
+            }
+        });
+    });
+    
+    // Initialize
+    updateFilesList();
+});
+</script>
+{% endblock %}

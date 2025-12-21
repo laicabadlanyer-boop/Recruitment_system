@@ -1,0 +1,624 @@
+{% extends "hr/_base.html" %}
+
+{% block title %}Reports & Analytics • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+  @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  :root {
+    --primary-red: #D50000;
+    --primary-dark: #7F0000;
+    --bg-dark: #0B1220;
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  }
+
+  * { font-family: 'Inter', sans-serif; }
+  body { background: var(--bg-dark); }
+  .brand-red { color: var(--primary-red); }
+  .bg-brand-red { background-color: var(--primary-red); }
+  
+  select, input[type="date"], input[type="text"], textarea {
+    font-size: 14px; font-weight: 500; transition: all .15s ease;
+    border: 1px solid rgba(148,163,184,.12); background: rgba(30,41,59,.8);
+    color: #E2E8F0; padding: .6rem; border-radius: .5rem;
+  }
+
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23E2E8F0' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    padding-right: 2.5rem;
+  }
+
+  select option {
+    background: #1e293b;
+    color: #E2E8F0;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 0.5rem;
+  }
+
+  .status-badge {
+    padding: 6px 12px; border-radius: 999px; font-size: 13px;
+    font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .status-pending { background: rgba(251,191,36,.12); color: #FBBF24; }
+  .status-scheduled { background: rgba(59,130,246,.12); color: #60A5FA; }
+  .status-interviewed { background: rgba(99,102,241,.12); color: #818CF8; }
+  .status-hired { background: rgba(16,185,129,.12); color: #6EE7B7; }
+  .status-rejected { background: rgba(239,68,68,.12); color: #F87171; }
+
+  .card { background: rgba(30,41,59,.8); border: 1px solid rgba(148,163,184,.06); border-radius: 12px; box-shadow: var(--shadow-md); }
+  table { border-collapse: collapse; width: 100%; }
+  table thead { background: linear-gradient(135deg, rgba(15,23,42,.9), rgba(30,41,59,.9)); }
+  table th { padding: 12px 16px; text-align: left; font-weight: 600; font-size: 13px; color: white; }
+  table td { padding: 12px 16px; color: #E2E8F0; }
+
+  .loading-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(213,0,0,.22); border-radius: 50%; border-top-color: var(--primary-red); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  .section-header { font-size: 18px; font-weight: 700; color: white; display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .section-header i { color: var(--primary-red); }
+  .kpi-icon { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; background: rgba(213,0,0,.08); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="bg-gray-900 min-h-screen">
+  <!-- FILTERS -->
+  <section class="max-w-7xl mx-auto px-4 pt-6">
+    <div class="card shadow-lg rounded-xl p-6 border border-gray-700">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-white">
+          <i class="fas fa-filter mr-2 brand-red"></i>
+          Generate Report
+        </h2>
+        <button onclick="exportExcel()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+          <i class="fas fa-file-excel"></i>
+          Export Excel
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 items-end">
+        <div>
+          <label for="reportRange" class="block text-xs font-medium text-gray-300 mb-1">Report Period</label>
+          <select id="reportRange" onchange="generateReport()" class="w-full">
+            <option value="week">Weekly Report</option>
+            <option value="month">Monthly Report</option>
+            <option value="year">Yearly Report</option>
+          </select>
+        </div>
+        <div>
+          <label for="positionFilter" class="block text-xs font-medium text-gray-300 mb-1">Position</label>
+          <select id="positionFilter" onchange="generateReport()" class="w-full">
+            <option value="all">All Positions</option>
+          </select>
+        </div>
+        <div>
+          <label for="branchFilter" class="block text-xs font-medium text-gray-300 mb-1">Branch</label>
+          <select id="branchFilter" onchange="generateReport()" class="w-full">
+            <option value="all">All Branches</option>
+          </select>
+        </div>
+        <div>
+          <label for="statusFilter" class="block text-xs font-medium text-gray-300 mb-1">Status</label>
+          <select id="statusFilter" onchange="generateReport()" class="w-full">
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="scheduled">Scheduled for Interview</option>
+            <option value="interviewed">Interviewed</option>
+            <option value="hired">Hired</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label for="dateFrom" class="block text-xs font-medium text-gray-300 mb-1">From Date</label>
+          <input type="date" id="dateFrom" onchange="generateReport()" class="w-full" />
+        </div>
+        <div>
+          <label for="dateTo" class="block text-xs font-medium text-gray-300 mb-1">To Date</label>
+          <input type="date" id="dateTo" onchange="generateReport()" class="w-full" />
+        </div>
+        <div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- KPI CARDS -->
+  <section class="max-w-7xl mx-auto mt-6 px-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="card p-6 border-l-4 border-brand-red">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-gray-300 text-sm font-medium">Total Applicants</h3>
+            <p id="kpiApplicants" class="text-3xl font-bold mt-2 text-white">0</p>
+          </div>
+          <div class="kpi-icon"><i class="fas fa-users brand-red"></i></div>
+        </div>
+      </div>
+      <div class="card p-6 border-l-4 border-blue-500">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-gray-300 text-sm font-medium">Interviews Scheduled</h3>
+            <p id="kpiInterviews" class="text-3xl font-bold mt-2 text-white">0</p>
+          </div>
+          <div class="kpi-icon"><i class="fas fa-calendar-check text-blue-400"></i></div>
+        </div>
+      </div>
+      <div class="card p-6 border-l-4 border-green-500">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-gray-300 text-sm font-medium">Hired</h3>
+            <p id="kpiHired" class="text-3xl font-bold mt-2 text-white">0</p>
+          </div>
+          <div class="kpi-icon"><i class="fas fa-user-check text-green-400"></i></div>
+        </div>
+      </div>
+      <div class="card p-6 border-l-4 border-purple-500">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-gray-300 text-sm font-medium">Avg. Time to Hire</h3>
+            <p id="kpiTimeToHire" class="text-3xl font-bold mt-2 text-white">0</p>
+            <p class="text-sm text-gray-400">in days</p>
+          </div>
+          <div class="kpi-icon"><i class="fas fa-clock text-purple-400"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Stats Modal Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+      <div class="card p-6 border border-green-500/30 bg-gradient-to-br from-gray-800 to-green-900/20">
+        <div class="flex items-center gap-3 mb-4">
+          <i class="fas fa-crown text-yellow-400 text-2xl"></i>
+          <h3 class="text-lg font-bold text-white">Top Branch</h3>
+        </div>
+        <p id="topBranchName" class="text-2xl font-bold text-green-400">-</p>
+        <p class="text-sm text-gray-400 mt-2">
+          <span id="topBranchApplicants" class="text-white font-semibold">0</span> applicants
+        </p>
+      </div>
+
+      <div class="card p-6 border border-blue-500/30 bg-gradient-to-br from-gray-800 to-blue-900/20">
+        <div class="flex items-center gap-3 mb-4">
+          <i class="fas fa-bolt text-blue-400 text-2xl"></i>
+          <h3 class="text-lg font-bold text-white">Fastest Hiring</h3>
+        </div>
+        <p id="fastestBranchName" class="text-2xl font-bold text-blue-400">-</p>
+        <p class="text-sm text-gray-400 mt-2">
+          <span id="fastestBranchDays" class="text-white font-semibold">0</span> days
+        </p>
+      </div>
+
+      <div class="card p-6 border border-purple-500/30 bg-gradient-to-br from-gray-800 to-purple-900/20">
+        <div class="flex items-center gap-3 mb-4">
+          <i class="fas fa-chart-line text-purple-400 text-2xl"></i>
+          <h3 class="text-lg font-bold text-white">Most Applicants</h3>
+        </div>
+        <p id="mostApplicantsBranchName" class="text-2xl font-bold text-purple-400">-</p>
+        <p class="text-sm text-gray-400 mt-2">
+          <span id="mostApplicantsBranchCount" class="text-white font-semibold">0</span> applicants
+        </p>
+      </div>
+    </div>
+
+    <!-- Branch Performance -->
+    <h3 class="section-header mt-6">
+      <i class="fas fa-chart-bar"></i>
+      Branch Performance Overview
+    </h3>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="card p-6 border border-gray-700 h-80">
+        <h3 class="text-xl font-bold text-white mb-4">
+          <i class="fas fa-chart-bar mr-2 brand-red"></i>
+          Applicants per Branch
+        </h3>
+        <div class="h-full"><canvas id="branchChart"></canvas></div>
+      </div>
+      <div>
+        <div class="overflow-x-auto border border-gray-700 rounded-lg">
+          <table class="w-full">
+            <thead class="bg-gray-900">
+              <tr><th>Branch</th><th>Applicants</th><th>Hired</th><th>Rate</th></tr>
+            </thead>
+            <tbody id="branchStatsTable" class="bg-gray-800"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hiring Trend -->
+    <h3 class="section-header mt-8">
+      <i class="fas fa-chart-line"></i>
+      Hiring Trend
+    </h3>
+
+    <div class="card p-6 border border-gray-700 h-80">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </section>
+
+  <!-- DETAILED REPORT TABLE -->
+  <section class="max-w-7xl mx-auto mt-8 px-4 mb-8">
+    <div class="card shadow-lg rounded-xl p-6 border border-gray-700">
+      <div class="flex justify-between items-start md:items-center mb-6 gap-4">
+        <div>
+          <h3 class="text-xl font-bold text-white">
+            <i class="fas fa-list mr-2 brand-red"></i>
+            Detailed Applicant Report
+          </h3>
+          <p class="text-gray-400 text-sm mt-1">
+            Showing <span id="showingCount" class="text-white">0</span> of <span id="totalCount" class="text-white">0</span> records
+            <span id="loadingIndicator" class="hidden ml-2"><span class="loading-spinner"></span> Filtering...</span>
+          </p>
+          <p class="text-gray-400 text-sm mt-2">
+            Branch: <span id="currentBranchDisplay" class="text-brand-red font-semibold">All Branches</span>
+          </p>
+        </div>
+      </div>
+      <div class="overflow-x-auto border border-gray-700 rounded-lg">
+        <table class="w-full">
+          <thead class="bg-brand-red">
+            <tr><th>Applicant</th><th>Position</th><th>Branch</th><th>Status</th><th>Date Applied</th><th>Interview Date</th><th>Time (days)</th></tr>
+          </thead>
+          <tbody id="reportTable" class="bg-gray-800"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- Chart.js CDN -->
+<!-- Fastest Hiring modal removed per request -->
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Branch scope for HR users (set by server). If not null, HR can only view that branch.
+window.hrBranchScope = {{ (branch_info.branch_id if branch_info and branch_info.get('branch_id') is not none else None) | tojson }};
+
+let branchChart, trendChart;
+let filteredTableData = [];
+const textColor = '#FFFFFF';
+
+function getStatusBadge(status) {
+  if (!status) return '<span class="status-badge status-pending">Pending</span>';
+  const s = status.toLowerCase();
+  const t = s.charAt(0).toUpperCase() + s.slice(1);
+  switch(s) {
+    case 'pending': return `<span class="status-badge status-pending">${t}</span>`;
+    case 'scheduled': return `<span class="status-badge status-scheduled">Scheduled</span>`;
+    case 'interviewed': return `<span class="status-badge status-interviewed">${t}</span>`;
+    case 'hired': return `<span class="status-badge status-hired">${t}</span>`;
+    case 'rejected': return `<span class="status-badge status-rejected">${t}</span>`;
+    default: return `<span class="status-badge status-pending">${t}</span>`;
+  }
+}
+
+async function fetchReportData() {
+  const period = document.getElementById('reportRange')?.value || 'month';
+  const branch = document.getElementById('branchFilter')?.value || 'all';
+  const job = document.getElementById('positionFilter')?.value || 'all';
+  const status = document.getElementById('statusFilter')?.value || 'all';
+  const dateFrom = document.getElementById('dateFrom')?.value || '';
+  const dateTo = document.getElementById('dateTo')?.value || '';
+
+  const loading = document.getElementById('loadingIndicator');
+  if (loading) loading.classList.remove('hidden');
+
+  try {
+    const params = new URLSearchParams({ period, branch, position: job, status, dateFrom, dateTo });
+    const resp = await fetch(`/api/reports/data?${params}`);
+    if (!resp.ok) {
+      console.error('Server error', resp.status);
+      return null;
+    }
+    const ct = resp.headers.get('content-type') || '';
+    if (!ct.toLowerCase().includes('application/json')) {
+      console.error('Invalid content-type', ct);
+      return null;
+    }
+    return await resp.json();
+  } catch(e) {
+    console.error(e);
+    return null;
+  } finally {
+    if (loading) loading.classList.add('hidden');
+  }
+}
+
+function updateBranchStatsTable(bp) {
+  const table = document.getElementById('branchStatsTable');
+  if (!table) return;
+  table.innerHTML = '';
+  if (!bp || Object.keys(bp).length === 0) {
+    table.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400">No data</td></tr>';
+    return;
+  }
+  Object.entries(bp).forEach(([b, st]) => {
+    table.innerHTML += `<tr class="border-t border-gray-700"><td class="p-3 text-white">${b}</td><td class="p-3 text-center text-white">${st.applicants || 0}</td><td class="p-3 text-center text-brand-red">${st.hired || 0}</td><td class="p-3 text-center">${Number(st.conversion_rate || 0).toFixed(1)}%</td></tr>`;
+  });
+}
+
+function updateTable() {
+  const table = document.getElementById('reportTable');
+  if (!table) return;
+  table.innerHTML = '';
+  if (filteredTableData.length === 0) {
+    table.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400">No records found</td></tr>';
+    return;
+  }
+  filteredTableData.forEach(row => {
+    let timeColor = 'text-gray-500';
+    if (row.time) {
+      if (row.time <= 7) timeColor = 'text-green-400';
+      else if (row.time <= 14) timeColor = 'text-blue-400';
+      else timeColor = 'text-yellow-400';
+    }
+    table.innerHTML += `<tr class="border-t border-gray-700"><td class="p-3 text-white">${row.name}</td><td class="p-3 text-gray-300">${row.job}</td><td class="p-3 text-white">${row.branch}</td><td class="p-3">${getStatusBadge(row.status)}</td><td class="p-3 text-gray-300">${row.date}</td><td class="p-3 text-gray-300">${row.interview || '-'}</td><td class="p-3 ${timeColor}">${row.time ? row.time + ' days' : '-'}</td></tr>`;
+  });
+  document.getElementById('showingCount').textContent = filteredTableData.length;
+  document.getElementById('totalCount').textContent = filteredTableData.length;
+}
+
+function updateTopStats(bp) {
+  if (!bp || Object.keys(bp).length === 0) {
+    document.getElementById('topBranchName').textContent = '-';
+    document.getElementById('topBranchApplicants').textContent = '0';
+    document.getElementById('fastestBranchName').textContent = '-';
+    document.getElementById('fastestBranchDays').textContent = '0';
+    document.getElementById('mostApplicantsBranchName').textContent = '-';
+    document.getElementById('mostApplicantsBranchCount').textContent = '0';
+    return;
+  }
+  
+  let topBranch = null, topApplicants = 0;
+  let fastestBranch = null, fastestDays = Infinity;
+  let mostBranch = null, mostCount = 0;
+  
+  Object.entries(bp).forEach(([b, st]) => {
+    if ((st.applicants || 0) > topApplicants) {
+      topApplicants = st.applicants || 0;
+      topBranch = b;
+    }
+    // Consider branch for fastest hiring only if it has at least one hired
+    const avgHire = (st.avg_time_to_hire === undefined) ? Infinity : st.avg_time_to_hire;
+    if ((st.hired || 0) > 0 && avgHire > 0 && avgHire < fastestDays) {
+      fastestDays = avgHire;
+      fastestBranch = b;
+    }
+    if ((st.applicants || 0) > mostCount) {
+      mostCount = st.applicants || 0;
+      mostBranch = b;
+    }
+  });
+  
+  document.getElementById('topBranchName').textContent = topBranch || '-';
+  document.getElementById('topBranchApplicants').textContent = topApplicants;
+  
+  document.getElementById('fastestBranchName').textContent = fastestBranch || '-';
+  document.getElementById('fastestBranchDays').textContent = fastestBranch ? Math.round(fastestDays) : 0;
+  
+  document.getElementById('mostApplicantsBranchName').textContent = mostBranch || '-';
+  document.getElementById('mostApplicantsBranchCount').textContent = mostCount;
+
+  // Fastest hiring modal removed - no modal behavior needed
+}
+
+// Fastest modal removed; modal helper functions have been removed as well
+
+function initBranchChart(bp) {
+  const c = document.getElementById('branchChart');
+  if (!c || typeof Chart === 'undefined') return;
+  const ctx = c.getContext('2d');
+  if (branchChart) try { branchChart.destroy(); } catch(e) {}
+  const raw = bp || {};
+  const labels = Object.keys(raw).length ? Object.keys(raw) : ['No Data'];
+  const app = labels.map(l => parseInt((raw[l]?.applicants || 0), 10));
+  const hired = labels.map(l => parseInt((raw[l]?.hired || 0), 10));
+  branchChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Applicants', data: app, backgroundColor: '#D50000' }, { label: 'Hired', data: hired, backgroundColor: '#10B981' }] },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      plugins: { legend: { labels: { color: textColor } } },
+      scales: {
+        y: {
+          ticks: { stepSize: 1, callback: function(v) { return v; } }
+        }
+      }
+    }
+  });
+}
+
+function initTrendChart(data) {
+  const c = document.getElementById('trendChart');
+  if (!c || typeof Chart === 'undefined') return;
+  const ctx = c.getContext('2d');
+  if (trendChart) try { trendChart.destroy(); } catch(e) {}
+  
+  const labels = data && data.labels ? data.labels : ['No Data'];
+  const values = data && data.data ? data.data : [0];
+  
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Hires',
+        data: values,
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        borderWidth: 3,
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#FFFFFF',
+        pointBorderColor: '#10B981',
+        pointBorderWidth: 2,
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: textColor } } },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, callback: function(v) { return v; } }
+        }
+      }
+    }
+  });
+}
+
+async function generateReport() {
+  const data = await fetchReportData();
+  if (!data || !data.success) return;
+  const branchFilter = document.getElementById('branchFilter')?.value || 'all';
+  document.getElementById('currentBranchDisplay').textContent = (branchFilter !== 'all') ? branchFilter : 'All Branches';
+  // Client-side date range filtering: ensure From/To filter the rows shown
+  const dateFromVal = document.getElementById('dateFrom')?.value || '';
+  const dateToVal = document.getElementById('dateTo')?.value || '';
+  let rows = data.applicantData || [];
+  if (dateFromVal || dateToVal) {
+    const fromDate = dateFromVal ? new Date(dateFromVal) : null;
+    const toDate = dateToVal ? new Date(dateToVal) : null;
+    // If toDate is provided, consider the end of that day
+    const toDateEnd = toDate ? new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59, 999) : null;
+    rows = rows.filter(r => {
+      // Expecting r.date to be a parsable date string (ISO or similar). If missing, exclude.
+      if (!r.date) return false;
+      const d = new Date(r.date);
+      if (isNaN(d)) return false;
+      if (fromDate && d < fromDate) return false;
+      if (toDateEnd && d > toDateEnd) return false;
+      return true;
+    });
+  }
+  filteredTableData = rows;
+  document.getElementById('kpiApplicants').textContent = (data.kpis?.applicants || 0).toLocaleString();
+  document.getElementById('kpiInterviews').textContent = (data.kpis?.interviews || 0).toLocaleString();
+  document.getElementById('kpiHired').textContent = (data.kpis?.hired || 0).toLocaleString();
+  document.getElementById('kpiTimeToHire').textContent = (data.kpis?.timeToHire || 0);
+  updateBranchStatsTable(data.branchPerformance || {});
+  initBranchChart(data.branchPerformance || {});
+  initTrendChart(data.trendChart || {});
+  updateTopStats(data.branchPerformance || {});
+  updateTable();
+}
+
+function exportExcel() {
+  if (filteredTableData.length === 0) {
+    alert('No data to export!');
+    return;
+  }
+  let csv = 'Applicant,Position,Branch,Status,Date Applied,Interview Date,Time to Hire\n';
+  filteredTableData.forEach(i => {
+    csv += `"${i.name}","${i.job}","${i.branch}","${i.status}","${i.date}","${i.interview || ''}","${i.time ? i.time + ' days' : ''}"\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  a.href = url;
+  a.download = `J&T_Report_${new Date().toISOString().split('T')[0]}.csv`;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+window.onload = async function() {
+  const today = new Date();
+  const wk = new Date();
+  wk.setDate(today.getDate() - 30);
+  const df = document.getElementById('dateFrom');
+  const dt = document.getElementById('dateTo');
+  if (df) df.valueAsDate = wk;
+  if (dt) dt.valueAsDate = today;
+  
+  // Fetch and populate branches dropdown
+  try {
+    const branchResp = await fetch('/api/branches');
+    if (branchResp.ok) {
+      const branchData = await branchResp.json();
+      const branchSelect = document.getElementById('branchFilter');
+      if (branchSelect && branchData.branches) {
+        // If HR user is scoped to a specific branch, show only that branch and disable selector
+        if (window.hrBranchScope !== null && window.hrBranchScope !== undefined) {
+          const assigned = branchData.branches.find(b => String(b.branch_id) === String(window.hrBranchScope));
+          if (assigned) {
+            branchSelect.innerHTML = '';
+            const option = document.createElement('option');
+            option.value = assigned.branch_id;
+            option.textContent = assigned.branch_name;
+            branchSelect.appendChild(option);
+            branchSelect.value = assigned.branch_id;
+            branchSelect.disabled = true;
+          } else {
+            // fallback: populate all branches but set the value and disable
+            branchData.branches.forEach(branch => {
+              const option = document.createElement('option');
+              option.value = branch.branch_id;
+              option.textContent = branch.branch_name;
+              branchSelect.appendChild(option);
+            });
+            branchSelect.value = window.hrBranchScope;
+            branchSelect.disabled = true;
+          }
+        } else {
+          branchData.branches.forEach(branch => {
+            const option = document.createElement('option');
+            option.value = branch.branch_id;
+            option.textContent = branch.branch_name;
+            branchSelect.appendChild(option);
+          });
+        }
+      }
+    }
+  } catch(e) {
+    console.error('Error loading branches:', e);
+  }
+  
+  // Fetch and populate positions dropdown
+  try {
+    const jobResp = await fetch('/api/jobs');
+    if (jobResp.ok) {
+      const jobData = await jobResp.json();
+      const positionSelect = document.getElementById('positionFilter');
+      if (positionSelect && jobData.jobs) {
+        jobData.jobs.forEach(job => {
+          const option = document.createElement('option');
+          option.value = job.title;
+          option.textContent = job.title;
+          positionSelect.appendChild(option);
+        });
+      }
+    }
+  } catch(e) {
+    console.error('Error loading positions:', e);
+  }
+  
+  document.querySelectorAll('select, input[type="date"]').forEach(el => {
+    el.addEventListener('change', generateReport);
+  });
+  
+  // Auto-generate report on page load
+  await generateReport();
+  
+  // Auto-refresh every 5 minutes (300000 ms)
+  setInterval(generateReport, 300000);
+
+  // Fastest modal removed; no bindings necessary
+};
+</script>
+
+{% endblock %}

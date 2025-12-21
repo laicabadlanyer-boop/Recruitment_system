@@ -1,0 +1,321 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}Applicant Tracking • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sidebar-item.active { border-color: #dc2626; background: rgba(220,38,38,.12); }
+    .action-btn { transition: all 0.2s ease; }
+    .action-btn:hover { transform: scale(1.05); }
+    .table-container { overflow-x: auto; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-card { background: rgba(55, 65, 81, 0.3); border-radius: 0.75rem; padding: 1rem; border: 1px solid rgba(75, 85, 99, 0.5); }
+    .stat-number { font-size: 1.875rem; font-weight: bold; color: white; }
+    .stat-label { font-size: 0.875rem; color: #9CA3AF; margin-top: 0.25rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="card rounded-2xl bg-gradient-to-r from-gray-900 via-gray-900 to-black p-4 sm:p-6 mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="min-w-0 flex-1">
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2 text-white">Applicant Tracking</h1>
+            <p class="text-gray-400 text-xs sm:text-sm md:text-base">Track all applications with applicant details, job position applied, and resume access.</p>
+            <p class="text-xs sm:text-sm text-gray-500 mt-2">Total applications: <span class="font-semibold text-white">{{ applications|length if applications else 0 }}</span></p>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="relative flex-1 sm:flex-initial sm:w-64">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                <label for="search-input" class="sr-only">Search applicants</label>
+                <input 
+                    type="text" 
+                    id="search-input"
+                    name="search"
+                    autocomplete="off"
+                    placeholder="Search by name, email, job position..." 
+                    aria-label="Search applicants"
+                    class="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none placeholder-gray-500"
+                >
+            </div>
+            <div>
+              <label for="status-filter" class="sr-only">Filter by status</label>
+              <select id="status-filter" name="status" class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 outline-none">
+                  <option value="">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="interviewed">Interviewed</option>
+                  <option value="hired">Hired</option>
+                  <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            {% if jobs %}
+            <div>
+              <label for="job-filter" class="sr-only">Filter by job</label>
+              <select id="job-filter" name="job_id" class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 outline-none">
+                  <option value="">All Jobs</option>
+                  {% for job in jobs %}
+                  <option value="{{ job.job_id }}">{{ job.job_title or job.title or 'Untitled' }}</option>
+                  {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</header>
+
+{% if applications and applications|length > 0 %}
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4">
+    <div class="table-container">
+        <table class="w-full text-sm min-w-[1200px]">
+            <thead>
+                <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-800">
+                    <th class="py-3 text-left px-4 font-semibold">Applicant</th>
+                    <th class="py-3 text-left px-4 font-semibold">Job Position Applied</th>
+                    <th class="py-3 text-left px-4 font-semibold">Branch</th>
+                    <th class="py-3 text-left px-4 font-semibold">Resume</th>
+                    <th class="py-3 text-left px-4 font-semibold">Date Submitted</th>
+                    <th class="py-3 text-left px-4 font-semibold">Status</th>
+                    <th class="py-3 text-left px-4 font-semibold">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                {% for app in applications %}
+                <tr class="applicant-row transition-colors" 
+                    data-name="{{ (app.applicant_name or '')|lower }}" 
+                    data-email="{{ (app.applicant_email or '')|lower }}"
+                    data-position="{{ (app.job_title or '')|lower }}"
+                    data-status="{{ app.status or '' }}"
+                    data-job-id="{{ app.job_id or '' }}">
+                    <td class="py-4 px-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-red-600/20 border border-red-600/30 flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-user text-red-400 text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="font-medium text-white">{{ app.applicant_name or '' }}</p>
+                                {% if app.applicant_email %}
+                                <p class="text-xs text-gray-400 mt-0.5">
+                                    <span class="text-gray-400">{{ app.applicant_email }}</span>
+                                    {% if app.email_verified %}
+                                    <span class="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-green-600/20 text-green-400 border border-green-600/30" title="Email Verified">
+                                        <i class="fas fa-check-circle"></i>
+                                    </span>
+                                    {% endif %}
+                                </p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="py-4 px-4">
+                        <p class="font-semibold text-white">{{ app.job_title or '' }}</p>
+                    </td>
+                    <td class="py-4 px-4">
+                        {% if app.branch_name and app.branch_name|lower not in ['unassigned','all branches'] %}
+                        <div class="flex items-center gap-2 text-gray-300">
+                            <i class="fas fa-map-marker-alt text-xs"></i>
+                            <span>{{ app.branch_name }}</span>
+                        </div>
+                        {% else %}
+                        <span class="text-gray-500"></span>
+                        {% endif %}
+                    </td>
+                    <td class="py-4 px-4">
+                        {% if app.has_resume and app.resume_id %}
+                        <div class="flex items-center gap-2">
+                            <a href="{{ url_for('view_applicant', applicant_id=app.applicant_id) }}" 
+                               class="action-btn px-3 py-1.5 rounded-lg text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/20 hover:border-blue-600/40 transition-colors flex items-center gap-1" 
+                               title="View Applicant Details">
+                                <i class="fas fa-eye"></i>
+                                <span>View</span>
+                            </a>
+                            {# Removed download link and documents count — access resumes from applicant details #}
+                        </div>
+                        {% else %}
+                        <span class="text-gray-500 text-xs italic">No resume</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-4 px-4">
+                        {% if app.submitted_at %}
+                        <span class="text-gray-300 text-xs font-medium">{{ app.submitted_at }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-4 px-4">
+                        {# Normalize status: map legacy statuses to canonical ones #}
+                        {% set raw_status = (app.status or 'pending')|lower|trim %}
+                        {% set status_normalization_map = {
+                            'pending': 'pending',
+                            'scheduled': 'scheduled',
+                            'interviewed': 'interviewed',
+                            'hired': 'hired',
+                            'rejected': 'rejected',
+                            'reviewed': 'pending',
+                            'shortlisted': 'pending',
+                            'accepted': 'hired',
+                            'applied': 'pending',
+                            'under_review': 'pending',
+                            'interview': 'interviewed'
+                        } %}
+                        {% set normalized_status = status_normalization_map.get(raw_status, 'pending') %}
+                        
+                        {# Status display configuration (only canonical statuses) #}
+                        {% set status_config = {
+                            'pending': {'class': 'bg-yellow-600/20 text-yellow-300 border-yellow-600/40', 'label': 'Pending'},
+                            'scheduled': {'class': 'bg-purple-600/20 text-purple-300 border-purple-600/40', 'label': 'Scheduled'},
+                            'interviewed': {'class': 'bg-cyan-600/20 text-cyan-300 border-cyan-600/40', 'label': 'Interviewed'},
+                            'hired': {'class': 'bg-green-600/20 text-green-300 border-green-600/40', 'label': 'Hired'},
+                            'rejected': {'class': 'bg-red-600/20 text-red-300 border-red-600/40', 'label': 'Rejected'}
+                        } %}
+                        {% set current_status = status_config.get(normalized_status, {'class': 'bg-gray-600/20 text-gray-300 border-gray-600/40', 'label': 'Pending'}) %}
+                        <span class="px-3 py-1.5 rounded-full text-xs font-semibold border {{ current_status.class }}">
+                            {{ current_status.label }}
+                        </span>
+                    </td>
+                    <td class="py-4 px-4">
+                        <div class="flex items-center gap-2">
+                            {% if not (app.status and app.status|lower == 'archived') %}
+                               <form method="POST" action="{{ url_for('archive_applicant', application_id=app.application_id) }}" class="inline" data-auto-archive="true" data-redirect="{{ url_for('admin_archived_applicants') }}" onsubmit="event.preventDefault(); archiveFormSubmit(this);">
+                                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="px-2 py-1 rounded-lg bg-gray-800 text-gray-200 hover:bg-gray-700 text-xs flex items-center gap-1" title="Archive application">
+                                    <i class="fas fa-archive"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="text-yellow-300 text-sm flex items-center gap-1" title="Archived"><i class="fas fa-archive"></i></span>
+                            {% endif %}
+                            {# Delete applicant (admin only) - perform via AJAX to avoid browser loading UI #}
+                            <form method="POST" action="{{ url_for('applicants') }}" class="inline ml-2 ajax-delete" data-action-url="{{ url_for('applicants') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="applicant_id" value="{{ app.applicant_id }}">
+                                <button type="button" class="px-2 py-1 rounded-lg bg-red-700 text-white hover:bg-red-600 text-xs flex items-center gap-1 ajax-delete-btn" data-applicant-id="{{ app.applicant_id }}" title="Delete Applicant">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% else %}
+<div class="rounded-xl border border-dashed border-gray-700/50 bg-gray-900/40 backdrop-blur-sm p-12 text-center text-gray-400">
+    <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
+        <i class="fas fa-file-alt text-3xl text-gray-600"></i>
+    </div>
+    <p class="text-lg font-semibold mb-2 text-gray-300">No applications found</p>
+    <p class="text-sm mb-6 text-gray-500">No applications have been submitted yet.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Search and filter functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('search-input');
+        const statusFilter = document.getElementById('status-filter');
+        const jobFilter = document.getElementById('job-filter');
+        const applicantRows = document.querySelectorAll('.applicant-row');
+        const params = new URLSearchParams(window.location.search);
+
+        // Initialize filters from URL params if present (e.g., ?status=shortlisted&job_id=123)
+        const initStatus = params.get('status');
+        const initJob = params.get('job_id');
+        if (statusFilter && initStatus !== null) statusFilter.value = initStatus;
+        if (jobFilter && initJob !== null) jobFilter.value = initJob;
+        
+        function applyFilters() {
+            const searchTerm = (searchInput?.value || '').toLowerCase();
+            const statusValue = statusFilter?.value || '';
+            const jobValue = jobFilter?.value || '';
+            
+            // Status normalization map (matches backend logic)
+            const statusMap = {
+                'pending': 'pending',
+                'scheduled': 'scheduled',
+                'interviewed': 'interviewed',
+                'hired': 'hired',
+                'rejected': 'rejected'
+            };
+            
+            applicantRows.forEach(row => {
+                const name = row.dataset.name || '';
+                const email = row.dataset.email || '';
+                const position = row.dataset.position || '';
+                const rawStatus = (row.dataset.status || '').toLowerCase();
+                const normalizedStatus = statusMap[rawStatus] || 'pending';
+                const jobId = row.dataset.jobId || '';
+                
+                // Check search term match
+                const matchesSearch = !searchTerm || 
+                    name.includes(searchTerm) || 
+                    email.includes(searchTerm) || 
+                    position.includes(searchTerm);
+                
+                // Check status match (normalize both filter value and row status)
+                const matchesStatus = !statusValue || statusValue === '' || normalizedStatus === statusValue;
+                
+                // Check job match (empty value means show all)
+                const matchesJob = !jobValue || jobValue === '' || jobId === jobValue;
+                
+                // Show row only if it matches all active filters
+                row.style.display = matchesSearch && matchesStatus && matchesJob ? '' : 'none';
+            });
+        }
+        
+        // Apply filters when any filter changes
+        if (searchInput) {
+            searchInput.addEventListener('input', applyFilters);
+        }
+        if (statusFilter) {
+            statusFilter.addEventListener('change', applyFilters);
+        }
+        if (jobFilter) {
+            jobFilter.addEventListener('change', applyFilters);
+        }
+        
+        // Apply filters on page load to handle any initial filter states
+        applyFilters();
+
+        // AJAX delete handlers: prevent full page loading spinner for delete actions
+        const ajaxDeleteButtons = document.querySelectorAll('.ajax-delete-btn');
+        ajaxDeleteButtons.forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                const btnEl = this;
+                openConfirmWithCallback(async function() {
+                    const form = btnEl.closest('form');
+                    if (!form) return;
+                    const formData = new FormData();
+                    form.querySelectorAll('input[type="hidden"]').forEach(i => formData.append(i.name, i.value));
+                    try {
+                        btnEl.disabled = true;
+                        const resp = await fetch(form.getAttribute('action') || form.dataset.actionUrl, {
+                            method: 'POST',
+                            body: formData,
+                            credentials: 'same-origin'
+                        });
+                        if (resp.ok) {
+                            window.location.reload();
+                        } else {
+                            try {
+                                const data = await resp.json();
+                                alert(data.error || 'Delete failed');
+                            } catch (err) {
+                                alert('Delete failed');
+                            }
+                            btnEl.disabled = false;
+                        }
+                    } catch (err) {
+                        console.error('Delete request failed', err);
+                        alert('Delete failed: ' + (err.message || 'network error'));
+                        btnEl.disabled = false;
+                    }
+                }, 'Delete this applicant and all related data? This cannot be undone.');
+            });
+        });
+    });
+</script>
+{% endblock %}

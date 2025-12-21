@@ -1,0 +1,693 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}Interviews • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sidebar-item.active { border-color: #dc2626; background: rgba(220,38,38,.12); }
+    .action-btn { transition: all 0.2s ease; }
+    .action-btn:hover { transform: scale(1.1); }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="card rounded-xl bg-gradient-to-r from-gray-900 via-gray-900 to-black p-3 sm:p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2 sm:gap-3">
+    <div class="min-w-0 flex-1">
+        <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2">Interview Management</h1>
+        <p class="text-gray-400 text-xs sm:text-sm md:text-base">View all candidate interviews across all branches.</p>
+        <p class="text-xs sm:text-sm text-gray-500 mt-2">
+            Today: <span class="font-semibold text-white">{{ interview_stats.get('scheduled_today', 0) if interview_stats else 0 }}</span> | 
+            Upcoming: <span class="font-semibold text-white">{{ upcoming|length }}</span> | 
+            Past: <span class="font-semibold text-white">{{ past|length }}</span>
+        </p>
+    </div>
+</header>
+
+{% set filters = current_filters if current_filters is defined else {} %}
+{% set interview_stats = interview_stats if interview_stats is defined else {} %}
+{% set interviews = interviews if interviews is defined else (upcoming + past) %}
+
+<!-- INTERVIEW STATISTICS -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  <div class="card rounded-xl bg-gray-900/80 p-4 sm:p-5 border border-gray-800">
+    <p class="text-xs uppercase tracking-wide text-gray-400 mb-2">Total Scheduled</p>
+    <p class="text-2xl sm:text-3xl font-bold text-white">{{ interview_stats.get('total_scheduled', 0) }}</p>
+    <p class="text-xs text-gray-500 mt-2">All interviews</p>
+  </div>
+  <div class="card rounded-xl bg-gray-900/80 p-4 sm:p-5 border border-gray-800">
+    <p class="text-xs uppercase tracking-wide text-gray-400 mb-2">Completed This Week</p>
+    <p class="text-2xl sm:text-3xl font-bold text-red-400">{{ interview_stats.get('completed_this_week', 0) }}</p>
+    <p class="text-xs text-gray-500 mt-2">Last 7 days</p>
+  </div>
+</section>
+
+<!-- Today's Interviews Quick Overview -->
+<section class="content-section card rounded-xl bg-gray-900/80 p-4 sm:p-6 mb-6 border border-red-600/20">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+      <i class="fas fa-calendar-day text-red-400"></i>
+      Today's Interviews
+    </h2>
+    <span class="px-3 py-1 rounded-full bg-red-600/20 text-red-300 text-xs sm:text-sm font-semibold" id="today-count">{{ interview_stats.get('scheduled_today', 0) }} scheduled</span>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4" id="today-interviews-container">
+    <!-- Today's interviews will be populated by JavaScript -->
+    <div class="col-span-full text-center py-8 text-gray-400">
+      <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
+      <p>Loading today's interviews...</p>
+    </div>
+  </div>
+</section>
+
+{% if upcoming %}
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4">
+    <h2 class="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
+        <i class="fas fa-calendar-check text-red-400"></i>
+        Upcoming Interviews
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+        {% for interview in upcoming %}
+        <div class="border border-red-600/40 bg-red-900/20 rounded-xl p-4 space-y-3">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <p class="font-semibold text-white text-lg">{{ interview.applicant_name }}</p>
+                    <p class="text-sm text-gray-300">{{ interview.job_title }}</p>
+                    <p class="text-xs text-gray-400 mt-1">{{ interview.branch_name }}</p>
+                </div>
+                {% if user.role != 'admin' %}
+                <div class="flex items-center gap-2">
+                    <button onclick="markCompleted({{ interview.interview_id }})" class="action-btn p-2 rounded-lg bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-600/20 hover:border-green-600/40 transition-all" title="Mark as Completed">
+                        <i class="fas fa-check text-xs"></i>
+                    </button>
+                    <button onclick="openEditModal({{ interview.interview_id }})" class="action-btn p-2 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/20 hover:border-blue-600/40 transition-all" title="Edit">
+                        <i class="fas fa-edit text-xs"></i>
+                    </button>
+                    <button onclick="confirmCancel({{ interview.interview_id }}, '{{ interview.applicant_name }}')" class="action-btn p-2 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-600/20 hover:border-red-600/40 transition-all" title="Cancel">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex items-center gap-2 text-gray-300">
+                    <i class="fas fa-calendar-alt text-red-400"></i>
+                    <span>{{ interview.scheduled_date }}</span>
+                </div>
+                <div class="flex items-center gap-2 text-gray-300">
+                    <i class="fas fa-map-marker-alt text-blue-400"></i>
+                    <span>{{ interview.location or '' }} ({{ interview.interview_mode|title }})</span>
+                </div>
+                {% if interview.notes %}
+                <div class="text-xs text-gray-400 mt-2">
+                    <i class="fas fa-sticky-note text-yellow-400"></i> {{ interview.notes }}
+                </div>
+                {% endif %}
+            </div>
+            <div class="pt-2 border-t border-gray-800 space-y-2">
+                {% set interview_result = '' %}
+                {% set result_class = 'bg-gray-600/20 text-gray-400' %}
+                {% if interview.notes and 'Decision:' in interview.notes %}
+                    {% set decision_line = interview.notes.split('Decision:')[1].split('\n')[0].strip() if 'Decision:' in interview.notes else '' %}
+                    {% if decision_line %}
+                        {% set interview_result = decision_line|title %}
+                    {% endif %}
+                {% elif interview.interview_status == 'completed' and interview.application_status %}
+                    {# If interview is completed but no decision in notes, use application status as result #}
+                    {% set interview_result = interview.application_status|title %}
+                {% endif %}
+                {% if interview_result %}
+                    {% if 'accepted' in interview_result|lower or 'hired' in interview_result|lower %}
+                        {% set result_class = 'bg-green-600/20 text-green-400 border-green-600/40' %}
+                    {% elif 'rejected' in interview_result|lower %}
+                        {% set result_class = 'bg-red-600/20 text-red-400 border-red-600/40' %}
+                    {% elif 'interviewed' in interview_result|lower %}
+                        {% set result_class = 'bg-cyan-600/20 text-cyan-400 border-cyan-600/40' %}
+                    {% else %}
+                        {% set result_class = 'bg-blue-600/20 text-blue-400 border-blue-600/40' %}
+                    {% endif %}
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500">Interview Result:</span>
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold border {{ result_class }}">
+                            {{ interview_result }}
+                        </span>
+                    </div>
+                {% endif %}
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500">Application Status:</span>
+                    <span class="px-2 py-1 rounded-full text-xs bg-gray-600/20 text-gray-400">{{ interview.application_status|title }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if past %}
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4">
+    <h2 class="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
+        <i class="fas fa-history text-gray-400"></i>
+        Past Interviews
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+        {% for interview in past %}
+        <div class="border border-gray-700 bg-gray-900/40 rounded-xl p-4 space-y-3">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <p class="font-semibold text-white text-lg">{{ interview.applicant_name }}</p>
+                    <p class="text-sm text-gray-300">{{ interview.job_title }}</p>
+                    <p class="text-xs text-gray-400 mt-1">{{ interview.branch_name }}</p>
+                </div>
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex items-center gap-2 text-gray-300">
+                    <i class="fas fa-calendar-alt text-gray-400"></i>
+                    <span>{{ interview.scheduled_date }}</span>
+                </div>
+                <div class="flex items-center gap-2 text-gray-300">
+                </div>
+            </div>
+            <div class="pt-2 border-t border-gray-800 space-y-2">
+                {% set interview_result = '' %}
+                {% set result_class = 'bg-gray-600/20 text-gray-400' %}
+                {% if interview.notes and 'Decision:' in interview.notes %}
+                    {% set decision_line = interview.notes.split('Decision:')[1].split('\n')[0].strip() if 'Decision:' in interview.notes else '' %}
+                    {% if decision_line %}
+                        {% set interview_result = decision_line|title %}
+                    {% endif %}
+                {% elif interview.interview_status == 'completed' and interview.application_status %}
+                    {# If interview is completed but no decision in notes, use application status as result #}
+                    {% set interview_result = interview.application_status|title %}
+                {% endif %}
+                {% if interview_result %}
+                    {% if 'accepted' in interview_result|lower or 'hired' in interview_result|lower %}
+                        {% set result_class = 'bg-green-600/20 text-green-400 border-green-600/40' %}
+                    {% elif 'rejected' in interview_result|lower %}
+                        {% set result_class = 'bg-red-600/20 text-red-400 border-red-600/40' %}
+                    {% elif 'interviewed' in interview_result|lower %}
+                        {% set result_class = 'bg-cyan-600/20 text-cyan-400 border-cyan-600/40' %}
+                    {% else %}
+                        {% set result_class = 'bg-blue-600/20 text-blue-400 border-blue-600/40' %}
+                    {% endif %}
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500">Interview Result:</span>
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold border {{ result_class }}">
+                            {{ interview_result }}
+                        </span>
+                    </div>
+                {% endif %}
+                
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if not upcoming and not past %}
+<div class="card rounded-2xl bg-gray-900/80 p-10 text-center text-gray-400">
+    <i class="fas fa-calendar-check text-4xl mb-3 text-gray-600"></i>
+    <p class="text-lg font-semibold mb-2">No interviews scheduled</p>
+    <p class="text-sm mb-4">{% if user.role == 'admin' %}No interviews found.{% else %}Schedule your first interview to get started.{% endif %}</p>
+    {% if user.role != 'admin' %}
+    <button onclick="openScheduleModal()" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 transition-colors font-semibold text-sm">Schedule Interview</button>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Schedule Interview Modal -->
+{% if user.role != 'admin' %}
+<div id="schedule-modal" class="modal-overlay hidden">
+    <div class="modal-content max-w-2xl">
+        <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+            <h3 class="text-lg sm:text-xl font-bold" id="modal-title">Schedule Interview</h3>
+            <button onclick="closeModal('schedule-modal')" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ url_for('admin_interviews') }}" class="p-4 sm:p-6 space-y-4 sm:space-y-5" id="interview-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" id="form-action" value="schedule">
+            <input type="hidden" name="interview_id" id="interview-id">
+            
+            <div>
+                <label for="applicant-id" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Applicant *</label>
+                <select name="applicant_id" id="applicant-id" autocomplete="off" required class="w-full form-input px-3 py-2 rounded-lg">
+                    <option value="">Select applicant</option>
+                    {% for applicant in applicants_for_schedule %}
+                        <option value="{{ applicant.applicant_id }}" 
+                                data-applications="{{ applicant.application_ids }}"
+                                title="{{ applicant.job_titles }}">
+                            {{ applicant.applicant_name }} - {{ applicant.application_count }} application{{ 's' if applicant.application_count != 1 else '' }}
+                            {% if applicant.job_titles %}
+                            ({{ applicant.job_titles[:50] }}{% if applicant.job_titles|length > 50 %}...{% endif %})
+                            {% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Showing all applicants who have applied to jobs. Application will be automatically selected.</p>
+                <!-- Hidden field to store application_id (auto-filled by JavaScript) -->
+                <input type="hidden" name="application_id" id="application-id-hidden" value="">
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="scheduled-date" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Date *</label>
+                    <input type="date" name="scheduled_date" id="scheduled-date" autocomplete="off" required class="w-full form-input px-3 py-2 rounded-lg">
+                </div>
+                <div>
+                    <label for="scheduled-time" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Time *</label>
+                    <input type="time" name="scheduled_time" id="scheduled-time" autocomplete="off" required class="w-full form-input px-3 py-2 rounded-lg">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <span class="block text-xs uppercase tracking-wide text-gray-400 mb-1" id="interview-mode-label">Mode</span>
+                    <div class="w-full form-input px-3 py-2 rounded-lg bg-gray-800/50 text-gray-400 border border-gray-700" aria-labelledby="interview-mode-label">
+                        In-Person
+                    </div>
+                    <input type="hidden" name="interview_mode" id="interview-mode-hidden" value="in-person" aria-label="Interview Mode">
+                </div>
+                <div>
+                    <label for="location" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Location</label>
+                    <input type="text" name="location" id="location" autocomplete="off" placeholder="Interview location" class="w-full form-input px-3 py-2 rounded-lg">
+                </div>
+            </div>
+            
+            <div>
+                <label for="notes" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Notes</label>
+                <textarea name="notes" id="notes" autocomplete="off" rows="3" placeholder="Additional notes or instructions" class="w-full form-input px-3 py-2 rounded-lg"></textarea>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-800 sticky bottom-0 bg-gray-900/95 backdrop-blur-md">
+                <button type="button" onclick="closeModal('schedule-modal')" class="px-4 py-2.5 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium order-2 sm:order-1">Cancel</button>
+                <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg font-semibold text-sm shadow-lg order-1 sm:order-2">Schedule Interview</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Cancel Confirmation Modal -->
+{% if user.role != 'admin' %}
+<div id="cancel-modal" class="modal-overlay hidden">
+    <div class="modal-content max-w-md border-red-600/30">
+        <div class="p-4 sm:p-6 border-b border-gray-800">
+            <h3 class="text-lg sm:text-xl font-bold text-red-400">Confirm Cancel</h3>
+        </div>
+        <div class="p-4 sm:p-6">
+            <p class="text-gray-300 mb-4">Are you sure you want to cancel the interview for "<span id="cancel-name" class="font-semibold"></span>"?</p>
+            <form method="POST" action="{{ url_for('admin_interviews') }}" id="cancel-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="cancel">
+                <input type="hidden" name="interview_id" id="cancel-id">
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
+                    <button type="button" onclick="closeModal('cancel-modal')" class="px-4 py-2.5 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium order-2 sm:order-1">No</button>
+                    <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg font-semibold text-sm shadow-lg order-1 sm:order-2">Yes, Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Interview data store - include all interviews (upcoming + past) for today's filtering
+    const interviewData = {{ (upcoming + past)|tojson|safe if upcoming and past else (upcoming|tojson|safe if upcoming else (past|tojson|safe if past else '[]')) }};
+    const applicationsData = {{ schedule_applications|tojson|safe if schedule_applications else '[]' }};
+    
+    // Render today's interviews
+    function renderTodaysInterviews() {
+      const container = document.getElementById('today-interviews-container');
+      if (!container) return;
+      
+      const today = new Date().toISOString().split('T')[0];
+      const todayInterviews = interviewData.filter(i => {
+        if (!i.scheduled_date_raw) return false;
+        const interviewDate = i.scheduled_date_raw.split(' ')[0];
+        return interviewDate === today && (i.interview_status === 'scheduled' || !i.interview_status);
+      });
+      
+      const todayCount = document.getElementById('today-count');
+      if (todayCount) {
+        requestAnimationFrame(() => {
+          todayCount.textContent = `${todayInterviews.length} scheduled`;
+        });
+      }
+      
+      // Build HTML string first (no DOM operations yet) to minimize reflows
+      let html = '';
+      
+      if (todayInterviews.length === 0) {
+        html = `
+          <div class="col-span-full text-center py-8 text-gray-400">
+            <i class="fas fa-calendar-times text-3xl mb-2 text-gray-600"></i>
+            <p>No interviews scheduled for today</p>
+          </div>
+        `;
+      } else {
+        const statusClass = 'bg-yellow-600/20 text-yellow-400 border-yellow-600/30';
+        html = todayInterviews.map(i => {
+          const rawLoc = (i.location || '').trim();
+          const isUnassigned = /^(\s*(unassigned(\s+branch)?|all(\s+branches?)?)\s*)$/i.test(rawLoc);
+          const loc = (!rawLoc || isUnassigned)
+            ? (i.interview_mode || 'in_person').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+            : rawLoc;
+          
+          return `
+            <div class="bg-gray-800/50 rounded-xl p-4 border border-red-600/40">
+              <div class="flex items-start justify-between mb-3">
+                <div>
+                  <p class="font-semibold text-white">${i.applicant_name || ''}</p>
+                  ${(i.job_title || '').trim() ? `<p class="text-sm text-gray-400">${i.job_title}</p>` : ''}
+                  ${(i.branch_name || '').trim() ? `<p class="text-xs text-gray-500 mt-1">${i.branch_name}</p>` : ''}
+                </div>
+                <span class="px-2 py-1 rounded-full text-xs font-semibold border ${statusClass}">Scheduled</span>
+              </div>
+              <div class="space-y-2 text-sm text-gray-300">
+                <p><i class="fas fa-clock text-red-400 mr-2"></i>${i.scheduled_date || ''}</p>
+                <p><i class="fas fa-map-marker-alt text-red-400 mr-2"></i>${loc}</p>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+      
+      // Single DOM write operation
+      container.innerHTML = html;
+    }
+    
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', function() {
+      // Render today's interviews
+      renderTodaysInterviews();
+    });
+    
+    // Make functions globally accessible
+    // Initialize form validation once (outside function to prevent duplicates)
+    let formValidationInitialized = false;
+    
+    function initializeFormValidation() {
+        if (formValidationInitialized) return;
+        
+        const interviewForm = document.getElementById('interview-form');
+        if (interviewForm) {
+            interviewForm.addEventListener('submit', function(e) {
+                const applicationIdHidden = document.getElementById('application-id-hidden');
+                const applicantSelect = document.getElementById('applicant-id');
+                
+                if (!applicantSelect || !applicantSelect.value) {
+                    e.preventDefault();
+                    alert('Please select an applicant.');
+                    return false;
+                }
+                
+                if (!applicationIdHidden || !applicationIdHidden.value) {
+                    e.preventDefault();
+                    alert('No application found for the selected applicant. Please ensure the applicant has submitted an application.');
+                    return false;
+                }
+                
+                console.log('📤 Submitting interview form with application_id:', applicationIdHidden.value);
+                return true;
+            });
+            formValidationInitialized = true;
+        }
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeFormValidation();
+    });
+    
+    // Make openScheduleModal globally accessible
+    function openScheduleModal(prefillApplicationId) {
+        const modalTitle = document.getElementById('modal-title');
+        const formAction = document.getElementById('form-action');
+        const interviewForm = document.getElementById('interview-form');
+        const interviewId = document.getElementById('interview-id');
+        const applicantSelect = document.getElementById('applicant-id');
+        
+        if (modalTitle) modalTitle.textContent = 'Schedule Interview';
+        if (formAction) formAction.value = 'schedule';
+        if (interviewForm) interviewForm.reset();
+        if (interviewId) interviewId.value = '';
+        
+        // Pre-fill application if application_id is provided
+        if (prefillApplicationId && applicantSelect) {
+            // Find the option that matches the application
+            const applications = {{ schedule_applications|tojson|safe if schedule_applications else '[]' }};
+            const matchingApp = applications.find(app => app.application_id == prefillApplicationId);
+            if (matchingApp) {
+                // Set the applicant_id (the form uses applicant_id, not application_id)
+                applicantSelect.value = matchingApp.applicant_id;
+                // Trigger change event to auto-select application
+                applicantSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        
+        // Handle applicant selection to auto-select first application
+        if (applicantSelect) {
+            // Remove any existing listeners to prevent duplicates
+            const newApplicantSelect = applicantSelect.cloneNode(true);
+            applicantSelect.parentNode.replaceChild(newApplicantSelect, applicantSelect);
+            const updatedApplicantSelect = newApplicantSelect;
+            
+            updatedApplicantSelect.addEventListener('change', function() {
+                const applicationIdHidden = document.getElementById('application-id-hidden');
+                const applications = {{ schedule_applications|tojson|safe if schedule_applications else '[]' }};
+                
+                if (this.value && applicationIdHidden) {
+                    // Get application IDs from the selected option's data attribute
+                    const selectedOption = this.options[this.selectedIndex];
+                    const applicationIdsStr = selectedOption ? selectedOption.getAttribute('data-applications') : null;
+                    
+                    if (applicationIdsStr && applicationIdsStr.trim()) {
+                        // Parse comma-separated application IDs
+                        const applicationIds = applicationIdsStr.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+                        
+                        if (applicationIds.length > 0) {
+                            // Filter applications from schedule_applications array
+                            const applicantApplications = applications.filter(app => applicationIds.includes(parseInt(app.application_id)));
+                            
+                            if (applicantApplications.length > 0) {
+                                // Sort by status priority
+                                applicantApplications.sort((a, b) => {
+                                    const statusPriority = {
+                                        'reviewed': 1,
+                                        'interviewed': 2,
+                                        'accepted': 3,
+                                        'pending': 4,
+                                        'rejected': 5
+                                    };
+                                    const aPriority = statusPriority[a.status] || 99;
+                                    const bPriority = statusPriority[b.status] || 99;
+                                    if (aPriority !== bPriority) {
+                                        return aPriority - bPriority;
+                                    }
+                                    return 0;
+                                });
+                                
+                                // Set the first application as the selected one
+                                applicationIdHidden.value = applicantApplications[0].application_id;
+                                console.log('✅ Auto-selected application_id:', applicationIdHidden.value);
+                            } else {
+                                // Fallback: use the first application ID from the data attribute
+                                applicationIdHidden.value = applicationIds[0];
+                                console.log('✅ Auto-selected application_id (from data attribute):', applicationIdHidden.value);
+                            }
+                        } else {
+                            applicationIdHidden.value = '';
+                            console.warn('⚠️ No valid application IDs found for selected applicant');
+                        }
+                    } else {
+                        // Fallback: try filtering by applicant_id
+                        const applicantApplications = applications.filter(app => app.applicant_id == this.value);
+                        if (applicantApplications.length > 0) {
+                            applicationIdHidden.value = applicantApplications[0].application_id;
+                            console.log('✅ Auto-selected application_id (fallback):', applicationIdHidden.value);
+                        } else {
+                            applicationIdHidden.value = '';
+                            console.warn('⚠️ No applications found for selected applicant');
+                        }
+                    }
+                } else if (applicationIdHidden) {
+                    applicationIdHidden.value = '';
+                }
+            });
+        }
+        
+        // Ensure form validation is initialized
+        initializeFormValidation();
+        
+        if (typeof openModal === 'function') {
+            openModal('schedule-modal');
+        } else if (typeof window.openModal === 'function') {
+            window.openModal('schedule-modal');
+        } else {
+            const modal = document.getElementById('schedule-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    }
+    
+    // Make it globally accessible
+    window.openScheduleModal = openScheduleModal;
+    
+    window.openEditModal = function(interviewId) {
+        // Get interview data from the page
+        const interviews = {% if upcoming %}{{ upcoming|tojson|safe }}{% else %}[]{% endif %};
+        const pastInterviews = {% if past %}{{ past|tojson|safe }}{% else %}[]{% endif %};
+        const allInterviews = [...interviews, ...pastInterviews];
+        
+        const interview = allInterviews.find(i => i.interview_id == interviewId || i.interview_id == parseInt(interviewId));
+        
+        if (!interview) {
+            alert('Interview not found. Please refresh the page and try again.');
+            return;
+        }
+        
+        const modalTitle = document.getElementById('modal-title');
+        const formAction = document.getElementById('form-action');
+        const interviewIdField = document.getElementById('interview-id');
+        const interviewForm = document.getElementById('interview-form');
+        
+        if (modalTitle) modalTitle.textContent = 'Edit Interview';
+        if (formAction) formAction.value = 'update';
+        if (interviewIdField) interviewIdField.value = interviewId;
+        
+        // Populate form fields
+        const scheduledDate = document.getElementById('scheduled-date');
+        const scheduledTime = document.getElementById('scheduled-time');
+        const interviewMode = document.getElementById('interview-mode');
+        const location = document.getElementById('location');
+        const notes = document.getElementById('notes');
+        
+        if (scheduledDate && interview.scheduled_date_raw) {
+            scheduledDate.value = interview.scheduled_date_raw;
+        }
+        if (scheduledTime && interview.scheduled_time_raw) {
+            scheduledTime.value = interview.scheduled_time_raw;
+        }
+        if (interviewMode && interview.interview_mode) {
+            // Map interview_mode to form value
+            const modeValue = interview.interview_mode === 'in_person' ? 'in-person' : 
+                            (interview.interview_mode === 'online' ? 'online' : 'phone');
+            interviewMode.value = modeValue;
+        }
+        if (location) location.value = interview.location || '';
+        if (notes) notes.value = interview.notes || '';
+        
+        // Reset applicant select (should be disabled in edit mode)
+        const applicantSelect = document.getElementById('applicant-id');
+        if (applicantSelect) {
+            applicantSelect.value = '';
+            applicantSelect.disabled = true;
+        }
+        
+        if (typeof openModal === 'function') {
+            openModal('schedule-modal');
+        } else if (typeof window.openModal === 'function') {
+            window.openModal('schedule-modal');
+        } else {
+            const modal = document.getElementById('schedule-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    };
+    
+    // Mark interview as completed
+    window.markCompleted = function(interviewId) {
+        openConfirmWithCallback(function() {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ url_for("admin_interviews") }}';
+            const csrfToken = document.querySelector('input[name="csrf_token"]');
+            if (csrfToken) {
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = csrfToken.value;
+                form.appendChild(csrfInput);
+            }
+            const actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'mark_attendance';
+            form.appendChild(actionInput);
+            const interviewInput = document.createElement('input');
+            interviewInput.type = 'hidden';
+            interviewInput.name = 'interview_id';
+            interviewInput.value = interviewId;
+            form.appendChild(interviewInput);
+            const statusInput = document.createElement('input');
+            statusInput.type = 'hidden';
+            statusInput.name = 'attendance_status';
+            statusInput.value = 'completed';
+            form.appendChild(statusInput);
+            document.body.appendChild(form);
+            form.submit();
+        }, 'Mark this interview as completed?');
+    }
+    
+    window.confirmCancel = function(interviewId, applicantName) {
+        const cancelName = document.getElementById('cancel-name');
+        const cancelId = document.getElementById('cancel-id');
+        
+        if (cancelName) cancelName.textContent = applicantName || 'this interview';
+        if (cancelId) cancelId.value = interviewId;
+        
+        if (typeof openModal === 'function') {
+            openModal('cancel-modal');
+        } else if (typeof window.openModal === 'function') {
+            window.openModal('cancel-modal');
+        } else {
+            const modal = document.getElementById('cancel-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    };
+    
+    // Auto-open schedule modal if application_id is in URL
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const applicationId = urlParams.get('application_id');
+        if (applicationId) {
+            // Open the schedule modal and pre-fill with the application
+            setTimeout(function() {
+                window.openScheduleModal(parseInt(applicationId));
+            }, 300); // Small delay to ensure DOM is ready
+        }
+    });
+    
+    // Reset form when opening schedule modal
+    document.addEventListener('DOMContentLoaded', function() {
+        const scheduleModal = document.getElementById('schedule-modal');
+        if (scheduleModal) {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (!scheduleModal.classList.contains('hidden')) {
+                        const applicantSelect = document.getElementById('applicant-id');
+                        if (applicantSelect && !applicantSelect.disabled) {
+                            applicantSelect.disabled = false;
+                        }
+                    }
+                });
+            });
+            observer.observe(scheduleModal, { attributes: true, attributeFilter: ['class'] });
+        }
+    });
+</script>
+{% endblock %}

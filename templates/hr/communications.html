@@ -1,0 +1,116 @@
+{% extends "hr/_base.html" %}
+
+{% block title %}Communications • J&T Express{% endblock %}
+
+{% block extra_css %}
+{% endblock %}
+
+{% block content %}
+{% set applicants_options = applicants_options if applicants_options is defined else [] %}
+{% set branch_info = branch_info if branch_info is defined else (dashboard_data.branch_info if dashboard_data else None) %}
+<header class="card rounded-2xl bg-gradient-to-r from-black via-gray-900 to-black p-6 sm:p-7 mb-6 shadow-lg">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+        <div class="space-y-4">
+            <div class="inline-flex items-center gap-2 bg-red-600/10 border border-red-600/30 px-3 py-1 rounded-full text-red-300 uppercase tracking-widest text-[11px]">
+                <i class="fas fa-comments"></i>
+                Candidate Communications
+            </div>
+            <div>
+                <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold leading-tight">Communications Console</h1>
+                <p class="text-gray-400 text-sm sm:text-base mt-3 max-w-3xl">Send interview invitations, share status updates, and maintain a searchable message log for every candidate in your branch.</p>
+            </div>
+            <!-- Access Scope Indicator -->
+            {% if branch_info %}
+            <div class="mt-4 pt-4 border-t border-gray-800">
+                <div class="flex items-center gap-2 text-xs text-gray-400 mb-2">
+                    <i class="fas fa-info-circle text-red-400"></i>
+                    <span class="uppercase tracking-wide">Branch Scope</span>
+                </div>
+                <p class="text-sm text-gray-300">
+                    <i class="fas fa-building text-red-400 mr-2"></i>
+                    <span class="font-semibold text-white">{{ branch_info.branch_name }}</span>
+                    <span class="text-gray-500 ml-2">- You can only communicate with applicants connected to this branch</span>
+                </p>
+            </div>
+            {% endif %}
+            <div class="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                {% if branch_info %}
+                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800/70 border border-gray-700">
+                    <i class="fas fa-building text-red-400"></i>{{ branch_info.branch_name }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2"></div>
+    </div>
+</header>
+
+<section id="send-message" class="card rounded-2xl bg-gray-900/80 p-4 sm:p-5 mb-6">
+    <h2 class="text-base sm:text-lg font-semibold mb-4 flex items-center gap-2">
+        <i class="fas fa-paper-plane text-red-300"></i>
+        Send Notification
+    </h2>
+    <form method="POST" class="space-y-4" id="send-comm-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="send_notification">
+        <div class="space-y-2">
+            <label for="application-id" class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Select Candidate *</label>
+            <select name="application_id" id="application-id" required class="w-full form-input px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 focus:border-red-500 transition-colors">
+                <option value="">Choose candidate</option>
+                {% for candidate in applicants_options %}
+                <option value="{{ candidate.application_id }}"
+                        data-job-title="{{ candidate.job_title }}"
+                        data-candidate-name="{{ candidate.applicant_name }}"
+                        data-candidate-status="{{ candidate.status }}">
+                    {{ candidate.applicant_name }} - {{ candidate.job_title }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-2">
+                <label for="sender-display" class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Sender</label>
+                <input type="text"
+                       id="sender-display"
+                       value="{{ current_user.full_name or 'HR Manager' }}"
+                       readonly
+                       class="w-full form-input px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-200 focus:border-gray-700 cursor-not-allowed">
+                <input type="hidden" name="sender_name" value="{{ current_user.full_name or 'HR Manager' }}">
+            </div>
+            <div class="space-y-2">
+                <label for="subject" class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Subject</label>
+                <input type="text" name="subject" id="subject" maxlength="150" placeholder="Enter subject" class="w-full form-input px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 focus:border-red-500 transition-colors">
+            </div>
+        </div>
+        <div class="space-y-2">
+            <label for="message" class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Message *</label>
+            <textarea name="message" id="message" rows="6" placeholder="Compose your message..." class="w-full form-input px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 focus:border-red-500 transition-colors" required></textarea>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+            <p class="text-[11px] text-gray-500">Messages are logged automatically with timestamps and delivery labels.</p>
+            <button type="submit" id="send-btn" class="px-6 py-2.5 rounded-lg font-semibold text-sm shadow-lg flex items-center justify-center gap-2 transition-all hover:shadow-xl bg-red-600 hover:bg-red-700 text-white">
+                <i class="fas fa-paper-plane"></i><span>Send Notification</span>
+            </button>
+        </div>
+    </form>
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Prevent double-submit
+    const form = document.getElementById('send-comm-form');
+    const sendBtn = document.getElementById('send-btn');
+    if (form && sendBtn) {
+        form.addEventListener('submit', () => {
+            sendBtn.disabled = true;
+            sendBtn.classList.add('opacity-60', 'cursor-not-allowed');
+            const label = sendBtn.querySelector('span');
+            if (label) label.textContent = 'Sending...';
+        }, { once: true });
+    }
+});
+</script>
+{% endblock %}

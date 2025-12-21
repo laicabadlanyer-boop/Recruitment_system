@@ -1,0 +1,451 @@
+{% extends "admin/_base.html" %}
+
+{% block title %}HR Accounts • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sidebar-item.active { border-color: #dc2626; background: rgba(220,38,38,.12); }
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="card rounded-xl bg-gradient-to-r from-gray-900 via-gray-900 to-black p-3 sm:p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2 sm:gap-3">
+    <div class="min-w-0 flex-1">
+        <h1 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2">HR Account Management</h1>
+        <p class="text-gray-400 text-xs sm:text-sm md:text-base">Create, manage, and monitor HR accounts across all branches.</p>
+        <p class="text-xs sm:text-sm text-gray-500 mt-2">Total HR accounts: <span class="font-semibold text-white">{{ accounts|length }}</span></p>
+    </div>
+    <button onclick="openAddModal()" class="btn-primary px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg whitespace-nowrap">
+        <i class="fas fa-plus"></i>
+        <span class="hidden sm:inline">Add HR Account</span>
+        <span class="sm:hidden">Add HR</span>
+    </button>
+</header>
+
+{% if accounts and accounts|length > 0 %}
+<section class="content-section card rounded-xl bg-gray-900/80 p-3 sm:p-4">
+    <div class="table-container">
+        <table class="w-full text-sm min-w-[800px]">
+            <thead>
+                <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-800">
+                    <th class="py-3 text-left px-2">HR Account</th>
+                    <th class="py-3 text-left px-2 hidden md:table-cell">Email</th>
+                    <th class="py-3 text-left px-2 hidden lg:table-cell">Scope</th>
+                    <th class="py-3 text-left px-2 hidden xl:table-cell">Last Login</th>
+                    <th class="py-3 text-left px-2">Status</th>
+                    <th class="py-3 text-left px-2">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                {% for account in accounts %}
+                <tr class="hover:bg-gray-800/50 transition-colors">
+                    <td class="py-4 px-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-red-600/20 border border-red-600/30 flex items-center justify-center">
+                                <i class="fas fa-user-tie text-red-400"></i>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-white">{{ account.full_name }}</p>
+                                <p class="text-xs text-gray-400 md:hidden">{{ account.email }}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="py-4 px-2 hidden md:table-cell text-gray-300">{{ account.email }}</td>
+                    <td class="py-4 px-2 hidden lg:table-cell">
+                        {% if account.branch_id %}
+                            <div class="flex flex-col gap-1">
+                                <span class="px-2 py-1 rounded-full bg-sky-700/20 text-sky-400 text-xs font-semibold">{{ account.branch_name }}</span>
+                                <span class="text-xs text-gray-500">Branch Restricted</span>
+                            </div>
+                        {% else %}
+                            <div class="flex flex-col gap-1">
+                                <span class="px-2 py-1 rounded-full bg-green-600/20 text-green-400 text-xs font-semibold">All Branches</span>
+                                <span class="text-xs text-gray-500">Full Access</span>
+                            </div>
+                        {% endif %}
+                    </td>
+                    <td class="py-4 px-2 hidden xl:table-cell text-gray-400 text-xs">
+                        {% if account.login_history %}
+                            {{ account.login_history[0].login_time|format_human_datetime if account.login_history[0].login_time else 'Never' }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </td>
+                    <td class="py-4 px-2">
+                        <span class="px-2 py-1 rounded-full text-xs {{ 'bg-green-600/20 text-green-400' if account.is_active else 'bg-red-600/20 text-red-400' }}">
+                            {{ 'Active' if account.is_active else 'Inactive' }}
+                        </span>
+                    </td>
+                    <td class="py-4 px-2">
+                        <div class="flex items-center gap-2">
+                            <button onclick="openEditModal({{ account.admin_id }})" class="p-2 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors" title="Edit">
+                                <i class="fas fa-edit text-xs"></i>
+                            </button>
+                            <button onclick="openResetPasswordModal({{ account.admin_id }}, '{{ account.full_name }}')" class="p-2 rounded-lg bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30 transition-colors" title="Reset Password">
+                                <i class="fas fa-key text-xs"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% else %}
+<div class="card rounded-2xl bg-gray-900/80 p-10 text-center text-gray-400">
+    <i class="fas fa-users text-4xl mb-3 text-gray-600"></i>
+    <p class="text-lg font-semibold mb-2">No HR accounts found</p>
+    <p class="text-sm mb-4">Create your first HR account to manage branch recruitment.</p>
+    <button onclick="openAddModal()" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 transition-colors font-semibold text-sm">Add HR Account</button>
+</div>
+{% endif %}
+
+<!-- Add/Edit HR Account Modal -->
+<div id="hr-modal" class="modal-overlay hidden">
+    <div class="modal-content max-w-2xl">
+        <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+            <h3 class="text-lg sm:text-xl font-bold" id="modal-title">Add HR Account</h3>
+            <button onclick="closeModal('hr-modal')" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ url_for('hr_accounts') }}" class="p-4 sm:p-6 space-y-4 sm:space-y-5" id="hr-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" aria-label="CSRF Token">
+            <input type="hidden" name="action" id="form-action" value="add" aria-label="Form Action">
+            <input type="hidden" name="admin_id" id="admin-id" aria-label="Admin ID">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="full-name" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Full Name *</label>
+                    <input type="text" name="full_name" id="full-name" autocomplete="name" required class="w-full form-input px-3 py-2 rounded-lg">
+                </div>
+                <div>
+                    <label for="email" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Email *</label>
+                    <input type="email" name="email" id="email" autocomplete="email" required class="w-full form-input px-3 py-2 rounded-lg">
+                </div>
+            </div>
+            
+            <!-- Hidden username field for password autofill accessibility -->
+            <label for="hr-username" class="sr-only">Username</label>
+            <input type="text" name="username" id="hr-username" autocomplete="username" value="" style="position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0;" tabindex="-1" aria-hidden="true">
+            
+            <div id="password-fields">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="password" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Password *</label>
+                        <input type="password" name="password" id="password" autocomplete="new-password" required minlength="6" class="w-full form-input px-3 py-2 rounded-lg">
+                    </div>
+                    <div>
+                        <label for="confirm-password" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Confirm Password *</label>
+                        <input type="password" name="confirm_password" id="confirm-password" autocomplete="new-password" required minlength="6" class="w-full form-input px-3 py-2 rounded-lg">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="branch-select" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Branch Scope</label>
+                    <select name="branch_id" id="branch-select" class="w-full form-input px-3 py-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700" onchange="updateBranchScopeDisplay()">
+                        <option value="">All Branches (Super Admin)</option>
+                        {% for b in branches %}
+                            <option value="{{ b.branch_id }}">{{ b.branch_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p id="branch-scope-info" class="text-xs text-gray-500 mt-1">This HR account will have access to manage all branches recruitment activities.</p>
+                </div>
+                <div>
+                    <label for="is-active" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">Status</label>
+                    <div class="flex items-center gap-3 mt-2">
+                        <input type="checkbox" name="is_active" id="is-active" checked class="w-5 h-5 rounded border-gray-700 bg-gray-800 text-red-600">
+                        <label for="is-active" class="text-sm text-gray-300">Active Account</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-800 sticky bottom-0 bg-gray-900/95 backdrop-blur-md">
+                <button type="button" onclick="closeModal('hr-modal')" class="px-4 py-2.5 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium order-2 sm:order-1">Cancel</button>
+                <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg font-semibold text-sm shadow-lg order-1 sm:order-2">Save Account</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div id="reset-password-modal" class="modal-overlay hidden">
+    <div class="modal-content max-w-md">
+        <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+            <h3 class="text-lg sm:text-xl font-bold">Reset Password</h3>
+            <button onclick="closeModal('reset-password-modal')" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ url_for('hr_accounts') }}" class="p-4 sm:p-6 space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" aria-label="CSRF Token">
+            <input type="hidden" name="action" id="reset-action" value="reset_password" aria-label="Form Action">
+            <input type="hidden" name="admin_id" id="reset-admin-id" aria-label="Admin ID">
+            <p class="text-sm text-gray-300 mb-4">Reset password for: <span id="reset-name" class="font-semibold"></span></p>
+            <!-- Hidden username field for password autofill accessibility -->
+            <label for="reset-username" class="sr-only">Username</label>
+            <input type="text" name="username" id="reset-username" autocomplete="username" value="" style="position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0;" tabindex="-1" aria-hidden="true">
+            
+            <div>
+                <label for="new-password" class="block text-xs uppercase tracking-wide text-gray-400 mb-1">New Password *</label>
+                <input type="password" name="new_password" id="new-password" autocomplete="new-password" required minlength="6" class="w-full form-input px-3 py-2 rounded-lg">
+            </div>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-800 sticky bottom-0 bg-gray-900/95 backdrop-blur-md">
+                <button type="button" onclick="closeModal('reset-password-modal')" class="px-4 py-2.5 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium order-2 sm:order-1">Cancel</button>
+                <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg font-semibold text-sm shadow-lg order-1 sm:order-2">Reset Password</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Login History Modal -->
+<div id="login-history-modal" class="modal-overlay hidden">
+    <div class="modal-content max-w-4xl">
+        <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+            <h2 id="login-history-title" class="text-lg sm:text-xl font-bold text-white">Login History</h2>
+            <button onclick="closeModal('login-history-modal')" class="p-2 rounded-lg hover:bg-gray-800 transition-colors text-gray-400 hover:text-white">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
+            <div id="login-history-content" class="space-y-3">
+                <!-- Login history will be populated here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Make functions globally accessible
+    window.openAddModal = function() {
+        const modalTitle = document.getElementById('modal-title');
+        const formAction = document.getElementById('form-action');
+        const hrForm = document.getElementById('hr-form');
+        const adminId = document.getElementById('admin-id');
+        const passwordFields = document.getElementById('password-fields');
+        const password = document.getElementById('password');
+        const confirmPassword = document.getElementById('confirm-password');
+        const isActive = document.getElementById('is-active');
+        
+        if (modalTitle) modalTitle.textContent = 'Add HR Account';
+        if (formAction) formAction.value = 'add';
+        
+        // Preserve CSRF token when resetting form
+        const csrfToken = document.querySelector('#hr-form input[name="csrf_token"]');
+        const csrfTokenValue = csrfToken ? csrfToken.value : '';
+        
+        if (hrForm) hrForm.reset();
+        
+        // Restore CSRF token after reset
+        if (csrfToken && csrfTokenValue) {
+            csrfToken.value = csrfTokenValue;
+        }
+        
+        if (adminId) adminId.value = '';
+        if (passwordFields) passwordFields.style.display = 'block';
+        if (password) password.required = true;
+        if (confirmPassword) confirmPassword.required = true;
+        if (isActive) isActive.checked = true;
+        const branchSelect = document.getElementById('branch-select');
+        if (branchSelect) branchSelect.value = '';
+        
+        if (typeof openModal === 'function') {
+            openModal('hr-modal');
+        } else if (typeof window.openModal === 'function') {
+            window.openModal('hr-modal');
+        } else {
+            const modal = document.getElementById('hr-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    };
+    
+    window.openEditModal = function(adminId) {
+        const accounts = {% if accounts %}{{ accounts|tojson|safe }}{% else %}[]{% endif %};
+        const account = accounts.find(a => a.admin_id == adminId || a.admin_id == parseInt(adminId));
+        if (!account) {
+            alert('Account not found. Please refresh the page and try again.');
+            return;
+        }
+        
+        const modalTitle = document.getElementById('modal-title');
+        const formAction = document.getElementById('form-action');
+        const adminIdField = document.getElementById('admin-id');
+        const fullName = document.getElementById('full-name');
+        const email = document.getElementById('email');
+        const branchSelect = document.getElementById('branch-select');
+        // Set branch select to account scope (empty means All Branches)
+        if (branchSelect) branchSelect.value = account.branch_id ? account.branch_id : '';
+        const isActive = document.getElementById('is-active');
+        const passwordFields = document.getElementById('password-fields');
+        const password = document.getElementById('password');
+        const confirmPassword = document.getElementById('confirm-password');
+        
+        if (modalTitle) modalTitle.textContent = 'Edit HR Account';
+        if (formAction) formAction.value = 'update';
+        if (adminIdField) adminIdField.value = account.admin_id;
+        if (fullName) fullName.value = account.full_name || '';
+        if (email) email.value = account.email || '';
+        // Branch scope: set select to account.branch_id or empty for All Branches
+        if (branchSelect) branchSelect.value = account.branch_id ? account.branch_id : '';
+        if (isActive) isActive.checked = account.is_active !== false;
+        if (passwordFields) passwordFields.style.display = 'none';
+        if (password) password.required = false;
+        if (confirmPassword) confirmPassword.required = false;
+        
+        if (typeof openModal === 'function') {
+            openModal('hr-modal');
+        } else if (typeof window.openModal === 'function') {
+            window.openModal('hr-modal');
+        } else {
+            const modal = document.getElementById('hr-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    };
+    
+    window.openResetPasswordModal = function(adminId, fullName) {
+        const resetAdminId = document.getElementById('reset-admin-id');
+        const resetName = document.getElementById('reset-name');
+        
+        if (resetAdminId) resetAdminId.value = adminId;
+        if (resetName) resetName.textContent = fullName || 'this account';
+        
+        if (typeof openModal === 'function') {
+            openModal('reset-password-modal');
+        } else if (typeof window.openModal === 'function') {
+            window.openModal('reset-password-modal');
+        } else {
+            const modal = document.getElementById('reset-password-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    };
+    
+    window.openLoginHistoryModal = function(adminId, fullName, loginHistory) {
+        const modalTitle = document.getElementById('login-history-title');
+        const modalContent = document.getElementById('login-history-content');
+        const modal = document.getElementById('login-history-modal');
+        
+        if (!modal) {
+            console.error('Login history modal not found');
+            return;
+        }
+        
+        // Escape fullName to prevent XSS
+        const safeFullName = String(fullName || 'Unknown').replace(/['"]/g, '');
+        if (modalTitle) modalTitle.textContent = `Login History - ${safeFullName}`;
+        
+        if (modalContent) {
+            // Parse loginHistory if it's a string (from JSON)
+            let historyData = loginHistory;
+            if (typeof loginHistory === 'string') {
+                try {
+                    historyData = JSON.parse(loginHistory);
+                } catch (e) {
+                    console.error('Error parsing login history:', e);
+                    historyData = [];
+                }
+            }
+            
+            if (!historyData || !Array.isArray(historyData) || historyData.length === 0) {
+                modalContent.innerHTML = `
+                    <div class="text-center py-10 text-gray-400">
+                        <i class="fas fa-history text-4xl mb-3 opacity-50"></i>
+                        <p class="text-sm font-semibold">No login history found</p>
+                        <p class="text-xs text-gray-500 mt-2">This account has not logged in yet</p>
+                    </div>
+                `;
+            } else {
+                let historyHtml = '<div class="table-container overflow-x-auto"><table class="w-full text-sm min-w-[600px]"><thead><tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-800"><th class="py-3 text-left px-2">Login Time</th><th class="py-3 text-left px-2">Logout Time</th><th class="py-3 text-left px-2 hidden lg:table-cell">Status</th></tr></thead><tbody class="divide-y divide-gray-800">';
+                
+                historyData.forEach(function(log) {
+                    const loginTime = log.login_time || log.loginTime || 'N/A';
+                    const logoutTime = log.logout_time || log.logoutTime || (log.is_active ? 'Active Session' : '');
+                    const isActive = log.is_active !== undefined ? log.is_active : (log.isActive !== undefined ? log.isActive : false);
+                    const statusClass = isActive ? 'bg-green-600/20 text-green-400' : 'bg-gray-600/20 text-gray-400';
+                    const statusText = isActive ? 'Active' : 'Ended';
+                    
+                    // Escape HTML to prevent XSS
+                    const safeLoginTime = String(loginTime).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const safeLogoutTime = String(logoutTime).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    
+                    historyHtml += `
+                        <tr class="hover:bg-gray-800/50 transition-colors">
+                            <td class="py-4 px-2 text-gray-300 text-xs">${safeLoginTime}</td>
+                            <td class="py-4 px-2 text-gray-300 text-xs">${safeLogoutTime}</td>
+                            <td class="py-4 px-2 hidden lg:table-cell">
+                                <span class="px-2 py-1 rounded-full text-xs ${statusClass}">${statusText}</span>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                historyHtml += '</tbody></table></div>';
+                modalContent.innerHTML = historyHtml;
+            }
+        }
+        
+        // Open the modal
+        modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+    };
+    
+    // Close modal function
+    window.closeModal = function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.add('hidden');
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+        }
+    };
+    
+    // Update branch scope display based on selection
+    window.updateBranchScopeDisplay = function() {
+        const branchSelect = document.getElementById('branch-select');
+        const branchScopeInfo = document.getElementById('branch-scope-info');
+        
+        if (!branchSelect || !branchScopeInfo) return;
+        
+        const selectedValue = branchSelect.value;
+        const selectedText = branchSelect.options[branchSelect.selectedIndex].text;
+        
+        if (selectedValue === '') {
+            // All Branches selected
+            branchScopeInfo.textContent = 'This HR account will have access to manage all branches recruitment activities.';
+            branchScopeInfo.className = 'text-xs text-green-500 mt-1';
+        } else {
+            // Specific branch selected
+            branchScopeInfo.textContent = `This HR account will be limited to manage ${selectedText} branch recruitment activities only.`;
+            branchScopeInfo.className = 'text-xs text-sky-500 mt-1';
+        }
+    };
+</script>
+{% endblock %}

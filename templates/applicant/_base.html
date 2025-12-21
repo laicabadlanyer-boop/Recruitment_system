@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta name="description" content="J&T Express Recruitment System - Applicant Workspace">
+    <title>{% block title %}Applicant Portal • J&T Express{% endblock %}</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpeg') }}" type="image/jpeg">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo.jpeg') }}">
+    <script>
+        (function() {
+            const noop = () => {};
+            const suppressed = [
+                'cdn.tailwindcss.com',
+                'Tailwind CSS is not recommended for production via CDN'
+            ];
+            ['warn','error'].forEach(level => {
+                const original = console[level] || noop;
+                console[level] = function(message, ...rest) {
+                    if (typeof message === 'string' && suppressed.some(txt => message.includes(txt))) {
+                        return;
+                    }
+                    return original.call(this, message, ...rest);
+                };
+            });
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+        * { 
+            font-family: 'Inter', sans-serif; 
+            box-sizing: border-box;
+        }
+        body { 
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+            white-space: nowrap;
+        }
+        .main-layout-container {
+            display: flex;
+            flex: 1;
+            min-height: calc(100vh - 73px);
+            position: relative;
+            width: 100%;
+            flex-wrap: nowrap;
+            align-items: stretch;
+        }
+        @media (min-width: 1024px) {
+            #sidebar {
+                flex-shrink: 0;
+            }
+        }
+        @media (min-width: 1280px) {
+            #sidebar {
+                width: 18rem;
+            }
+        }
+        main {
+            flex: 1;
+            min-width: 0;
+        }
+        @media (min-width: 1024px) {
+            main {
+                margin-left: 0;
+            }
+        }
+        .sidebar-item { 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            border: 1px solid transparent; 
+            position: relative;
+        }
+        .sidebar-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 0;
+            background: #dc2626;
+            transition: height 0.3s ease;
+            border-radius: 0 2px 2px 0;
+        }
+        .sidebar-item:hover { 
+            border-color: rgba(220,38,38,0.2); 
+            background: rgba(220,38,38,0.08); 
+            transform: translateX(4px);
+        }
+        .sidebar-item:hover::before {
+            height: 60%;
+        }
+        .sidebar-item.active { 
+            border-color: rgba(220,38,38,0.3); 
+            background: rgba(220,38,38,0.12); 
+            color: #fff;
+        }
+        .sidebar-item.active::before {
+            height: 80%;
+        }
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 35;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        .sidebar-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        #sidebar {
+            z-index: 40;
+        }
+        @media (max-width: 1023px) {
+            #sidebar {
+                box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+                position: fixed;
+                inset: 73px auto 0 0;
+                height: calc(100vh - 73px);
+                overflow-y: auto;
+                background: rgba(8, 8, 10, 0.95);
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            #sidebar.open {
+                transform: translateX(0);
+            }
+        }
+        @media (min-width: 1024px) {
+            #sidebar {
+                position: sticky;
+                top: 73px;
+                height: calc(100vh - 73px);
+                overflow-y: auto;
+            }
+            #sidebar-backdrop {
+                display: none;
+            }
+        }
+        .card { 
+            border: 1px solid rgba(255,255,255,0.06); 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.02);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(17, 24, 39, 0.85);
+        }
+        .card:hover {
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(220,38,38,0.15);
+            transform: translateY(-2px);
+            border-color: rgba(220,38,38,0.2);
+        }
+        .card-interactive {
+            cursor: pointer;
+        }
+        .card-interactive:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(220,38,38,0.2), 0 0 0 1px rgba(220,38,38,0.25);
+        }
+        .form-input { 
+            background: rgba(17,24,39,0.8); 
+            border: 1px solid rgba(31,41,55,0.8); 
+            color: #fff; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 100%;
+            border-radius: 0.5rem;
+        }
+        .form-input::placeholder {
+            color: rgba(156, 163, 175, 0.5);
+        }
+        .form-input:hover {
+            border-color: rgba(220,38,38,0.3);
+            background: rgba(17,24,39,0.9);
+        }
+        .form-input:focus { 
+            outline: none; 
+            border-color: #dc2626; 
+            box-shadow: 0 0 0 3px rgba(220,38,38,0.15), 0 0 20px rgba(220,38,38,0.1);
+            background: rgba(17,24,39,0.95);
+        }
+        select.form-input {
+            cursor: pointer;
+        }
+        textarea.form-input {
+            resize: vertical;
+            min-height: 100px;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(31,41,55,0.5); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(220,38,38,0.5); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(220,38,38,0.7); }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); }
+            to { transform: translateX(-100%); }
+        }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        .animate-slide-in { animation: slideIn 0.3s ease-out; }
+        .animate-slide-out { animation: slideOut 0.3s ease-out; }
+        table {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        table thead {
+            background: rgba(31, 41, 55, 0.5);
+        }
+        table thead th {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.75rem;
+        }
+        table tbody tr {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-bottom: 1px solid rgba(31, 41, 55, 0.5);
+        }
+        table tbody tr:last-child {
+            border-bottom: none;
+        }
+        table tbody tr:hover {
+            background: rgba(220,38,38,0.08);
+            transform: scale(1.01);
+        }
+        table tbody td {
+            padding: 1rem 0.75rem;
+            vertical-align: middle;
+            word-break: break-word;
+        }
+        .table-container {
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            box-shadow: 0 4px 15px rgba(220,38,38,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(220,38,38,0.3);
+            font-weight: 600;
+            letter-spacing: 0.025em;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+            box-shadow: 0 6px 20px rgba(220,38,38,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+            transform: translateY(-2px);
+            border-color: rgba(220,38,38,0.5);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 10px rgba(220,38,38,0.3);
+        }
+        .btn-secondary {
+            background: rgba(31, 41, 55, 0.8);
+            border: 1px solid rgba(75, 85, 99, 0.5);
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+        .btn-secondary:hover {
+            background: rgba(31, 41, 55, 1);
+            border-color: rgba(220,38,38,0.3);
+            transform: translateY(-1px);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(220,38,38,0.4);
+            color: rgba(248, 200, 200, 0.9);
+            transition: all 0.3s ease;
+        }
+        .btn-outline:hover {
+            background: rgba(220,38,38,0.1);
+            border-color: rgba(220,38,38,0.6);
+            color: #fff;
+        }
+        .status-badge {
+            padding: 0.375rem 0.875rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            letter-spacing: 0.025em;
+        }
+        .status-badge i {
+            font-size: 0.625rem;
+        }
+        .badge-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: rgba(167, 243, 208, 0.95);
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: rgba(254, 240, 138, 0.95);
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: rgba(254, 202, 202, 0.95);
+            border-color: rgba(239, 68, 68, 0.35);
+        }
+        .badge-info {
+            background: rgba(59, 130, 246, 0.15);
+            color: rgba(191, 219, 254, 0.95);
+            border-color: rgba(59, 130, 246, 0.35);
+        }
+        .badge-primary {
+            background: rgba(220, 38, 38, 0.15);
+            color: rgba(248, 200, 200, 0.95);
+            border-color: rgba(220, 38, 38, 0.35);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #fff 0%, #d1d5db 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .spinner {
+            border: 2px solid rgba(220,38,38,0.2);
+            border-top-color: #dc2626;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .notification-badge {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .notification-menu {
+            position: relative;
+        }
+        .notification-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #f5f5f5;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .notification-button:hover,
+        .notification-button[aria-expanded="true"] {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.18);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+        }
+        .notification-dropdown {
+            position: absolute;
+            top: 60px;
+            right: 0;
+            width: min(340px, 88vw);
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(16px);
+            z-index: 60;
+            opacity: 0;
+            transform: translateY(-10px);
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .notification-dropdown.open {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .notification-dropdown ul {
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .notification-dropdown li + li {
+            border-top: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .notification-dropdown .notif-item {
+            padding: 0.9rem 1.1rem;
+            display: flex;
+            gap: 0.9rem;
+        }
+        .notification-dropdown .notif-meta {
+            flex: 1;
+            min-width: 0;
+        }
+        .notification-dropdown .notif-message {
+            color: #e2e8f0;
+            font-size: 0.85rem;
+            line-height: 1.35;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        .notification-dropdown .notif-time {
+            color: #94a3b8;
+            font-size: 0.75rem;
+            margin-top: 0.35rem;
+        }
+        .notification-icon {
+            width: 24px;
+            height: 24px;
+            fill: #f8fafc;
+            filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.55));
+        }
+        .notification-button:hover .notification-icon,
+        .notification-button[aria-expanded="true"] .notification-icon {
+            fill: #ffffff;
+            filter: drop-shadow(0 3px 10px rgba(248, 113, 113, 0.65));
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-out;
+        }
+        .modal-overlay:not(.hidden) {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-overlay::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            position: relative;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            background: rgba(17, 24, 39, 0.98);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(220, 38, 38, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            overflow-y: auto;
+            animation: modalFadeIn 0.3s ease-out;
+            display: flex;
+            flex-direction: column;
+            z-index: 101;
+        }
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        body.modal-open {
+            overflow: hidden;
+        }
+        @media (max-width: 639px) {
+            .text-3xl { font-size: 1.5rem; }
+            .text-2xl { font-size: 1.25rem; }
+            .text-xl { font-size: 1.125rem; }
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.25rem; }
+            h3 { font-size: 1.125rem; }
+            .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            table { min-width: 600px; }
+        }
+        @media (min-width: 640px) and (max-width: 1023px) {
+            h1 { font-size: 1.75rem; }
+            h2 { font-size: 1.5rem; }
+            h3 { font-size: 1.25rem; }
+            .table-container { overflow-x: auto; }
+        }
+        @media (min-width: 1024px) {
+            h1 { font-size: 2rem; }
+            h2 { font-size: 1.75rem; }
+            h3 { font-size: 1.5rem; }
+        }
+        @media (min-width: 1440px) {
+            h1 { font-size: 2.25rem; }
+            h2 { font-size: 2rem; }
+            h3 { font-size: 1.75rem; }
+        }
+        @media (max-width: 767px) {
+            .table-container {
+                margin: 0 -0.5rem;
+                padding: 0 0.5rem;
+            }
+            table {
+                font-size: 0.75rem;
+            }
+            th, td {
+                padding: 0.5rem 0.25rem;
+            }
+        }
+        @media (max-width: 639px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            .modal-content {
+                margin: 1rem;
+                max-width: calc(100% - 2rem);
+            }
+        }
+        @media (max-width: 639px) {
+            .btn-primary {
+                width: 100%;
+                justify-content: center;
+            }
+            .flex.gap-2 {
+                flex-direction: column;
+            }
+            .flex.gap-2 > * {
+                width: 100%;
+            }
+        }
+        {% block base_css %}{% endblock %}
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="scroll-body">
+    <div id="sidebar-backdrop" class="sidebar-overlay"></div>
+    <header class="glass-panel border-0/0 shadow-xl sticky top-0 z-40">
+        <div class="mx-auto w-full px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between py-4 gap-4">
+                <div class="flex items-center gap-3">
+                    <button id="open-sidebar" aria-label="Open menu" class="lg:hidden p-2.5 rounded-2xl bg-transparent text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 transition">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" focusable="false">
+                            <path d="M3 6h18"></path>
+                            <path d="M3 12h18"></path>
+                            <path d="M3 18h18"></path>
+                        </svg>
+                    </button>
+                    <a href="{{ url_for('applicant_dashboard') }}" class="flex items-center gap-3">
+                        <div class="relative">
+                            <img src="{{ url_for('static', filename='images/logo.jpeg') }}" alt="WHITEHAT 88" class="w-10 h-10 rounded-2xl object-cover border border-white/20 shadow-lg">
+                        </div>
+                        <div>
+                            <p class="text-base font-semibold tracking-wide text-white">J&T Express</p>
+                            <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Applicant</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="flex items-center gap-3">
+                    {% set mini_notifications = recent_notifications or [] %}
+                    <div class="notification-menu">
+                        <button id="notification-toggle" type="button" class="notification-button relative p-3" aria-expanded="false" aria-haspopup="true" aria-label="View notifications">
+                            <svg class="notification-icon" viewBox="0 0 24 24" role="img" aria-hidden="true">
+                                <path d="M12 22c1.2 0 2.17-.93 2.24-2.1H9.76C9.83 21.07 10.8 22 12 22Zm7-6v-5.05c0-3.67-2.42-6.83-5.76-7.73V2.5a1.24 1.24 0 0 0-2.48 0v.72C7.42 4.12 5 7.28 5 10.95V16l-1.74 1.3A.72.72 0 0 0 4 18.5h16a.72.72 0 0 0 .74-.72Z"/>
+                            </svg>
+                            {% if unread_count %}
+                            <span class="notification-badge absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold shadow-lg">{{ unread_count }}</span>
+                            {% endif %}
+                        </button>
+                        <div id="notification-dropdown" class="notification-dropdown">
+                            <div class="p-4 border-b border-white/5 flex items-center justify-between">
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.35em] text-slate-400">Notifications</p>
+                                    <p class="text-base font-semibold text-white">{{ unread_count }} unread</p>
+                                </div>
+                                <a href="{{ url_for('applicant_notifications') }}" class="text-xs font-semibold text-rose-300 hover:text-rose-100 transition">
+                                    View all
+                                </a>
+                            </div>
+                            <ul>
+                                {% if mini_notifications %}
+                                    {% for note in mini_notifications %}
+                                    <li class="{{ '' if note.is_read else 'bg-white/5' }}">
+                                        <div class="notif-item">
+                                            <div class="notif-meta">
+                                                <p class="text-white font-semibold text-sm mb-1">{{ note.job_title or 'System Message' }}</p>
+                                                <p class="text-xs text-slate-400 mb-2">{{ note.application_status|replace('_',' ')|title if note.application_status else '' }}</p>
+                                                <p class="notif-message">{{ note.message }}</p>
+                                                <p class="notif-time">{{ note.sent_at }}</p>
+                                            </div>
+                                        </div>
+                                    </li>
+                                    {% endfor %}
+                                {% else %}
+                                    <li>
+                                        <div class="notif-item text-center justify-center">
+                                            <p class="text-sm text-slate-400">No notifications yet.</p>
+                                        </div>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                            <div class="p-3 border-t border-white/5">
+                                <a href="{{ url_for('applicant_notifications') }}" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-2xl bg-white/10 text-white text-sm font-semibold hover:bg-white/20 transition">
+                                    Manage notifications <i class="fas fa-arrow-right text-xs"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <button id="user-btn" class="flex items-center gap-2 p-2 rounded-lg hover:bg-white/10 transition-all group">
+                            <div class="w-8 h-8 bg-gradient-to-br from-rose-600 to-rose-700 rounded-full flex items-center justify-center border-2 border-rose-500/30 group-hover:border-rose-500/60 transition-all shadow-lg">
+                                <i class="fas fa-user text-white text-xs"></i>
+                            </div>
+                            <i class="fas fa-chevron-down text-white/70 text-xs group-hover:text-white transition-colors hidden sm:block"></i>
+                        </button>
+                        <div id="user-dd" class="absolute right-0 mt-2 w-56 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-800 hidden z-50 overflow-hidden">
+                            <a href="{{ url_for('applicant_profile') }}" class="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-800/50 transition-colors border-b border-gray-800">
+                                <i class="fas fa-user-circle mr-2 text-rose-400"></i>Profile
+                            </a>
+                            <div class="border-t border-gray-800"></div>
+                            <a href="{{ url_for('logout') }}" class="block px-4 py-3 text-sm text-rose-400 hover:bg-rose-600/20 transition-colors">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex w-full min-h-[calc(100vh-96px)] relative">
+        <aside id="sidebar" class="glass-panel lg:static lg:translate-x-0 lg:w-72 p-5 flex flex-col gap-6">
+            <div class="flex items-center justify-between lg:hidden mb-2">
+                <span class="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">Navigate</span>
+                <button id="close-sidebar" aria-label="Close menu" class="p-2.5 rounded-2xl bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-white/30 focus:outline-none focus:ring-2 focus:ring-white/40 transition">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" focusable="false">
+                        <path d="M6 6l12 12"></path>
+                        <path d="M18 6L6 18"></path>
+                    </svg>
+                </button>
+            </div>
+            <nav>
+                <ul class="space-y-2">
+                    <li><a href="{{ url_for('applicant_dashboard') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-chart-line w-5 text-center"></i><span class="ml-3 font-medium">Dashboard</span></a></li>
+                </ul>
+            </nav>
+            
+            <!-- C.3 Job Browsing and Application Module -->
+            <nav>
+                <ul class="space-y-2">
+                    <li><a href="{{ url_for('jobs') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-briefcase w-5 text-center"></i><span class="ml-3 font-medium">Browse Jobs</span></a></li>
+                    <li><a href="{{ url_for('saved_jobs') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-bookmark w-5 text-center"></i><span class="ml-3 font-medium">Saved Jobs</span></a></li>
+                    <li><a href="{{ url_for('applicant_applications') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-file-signature w-5 text-center"></i><span class="ml-3 font-medium">My Applications</span></a></li>
+                </ul>
+            </nav>
+            
+            <!-- C.4 Interview Management Module -->
+            <nav>
+                <ul class="space-y-2">
+                    <li><a href="{{ url_for('applicant_interviews') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-calendar-check w-5 text-center"></i><span class="ml-3 font-medium">My Interviews</span></a></li>
+                </ul>
+            </nav>
+            
+            <!-- C.5 Notifications Module -->
+            <nav>
+                <ul class="space-y-2">
+                    <li><a href="{{ url_for('applicant_notifications') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base"><i class="fas fa-bell w-5 text-center"></i><span class="ml-3 font-medium">Notifications</span></a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="flex-1 px-4 sm:px-6 lg:px-10 py-6 space-y-4">
+            {# Flash messages removed per user request #}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script>
+        // Shared DOM helpers and safe form normalization
+        (function initSharedHelpers(){
+            window.$id = function(id){ try { return document.getElementById(id); } catch(e) { return null; } };
+            window.onKeyToggle = function(el, menu, event){
+                if (!el || !menu) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    menu.classList.toggle('open');
+                    const expanded = el.getAttribute('aria-expanded') === 'true';
+                    el.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                }
+            };
+            document.addEventListener('DOMContentLoaded', function(){
+                try {
+                    // Add ids from names, pair labels, add aria-required where needed
+                    const usedIds = new Set(Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+                    const ensureUniqueId = (base) => {
+                        let cleaned = String(base || '').trim().replace(/\s+/g, '-').toLowerCase();
+                        if (!cleaned) cleaned = 'field';
+                        let candidate = cleaned;
+                        let i = 1;
+                        while (usedIds.has(candidate)) {
+                            candidate = `${cleaned}-${i++}`;
+                        }
+                        usedIds.add(candidate);
+                        return candidate;
+                    };
+                    document.querySelectorAll('form').forEach(form => {
+                        form.querySelectorAll('input, select, textarea').forEach((field, idx) => {
+                            const lname = (field.name || field.id || '').toLowerCase();
+                            if (!field.id) {
+                                const base = field.name || (field.tagName.toLowerCase() + '-' + (field.type || 'field') + '-' + idx);
+                                field.id = ensureUniqueId(base);
+                            }
+                            if (field.required && !field.hasAttribute('aria-required')) {
+                                field.setAttribute('aria-required', 'true');
+                            }
+                            // Autocomplete hints based on common names
+                            if (!field.hasAttribute('autocomplete')) {
+                                if (lname.includes('email')) field.setAttribute('autocomplete', 'email');
+                                else if (lname.includes('phone') || lname.includes('contact')) field.setAttribute('autocomplete', 'tel');
+                                else if (lname.includes('name') && !lname.includes('company')) field.setAttribute('autocomplete', 'name');
+                                else if (lname.includes('address')) field.setAttribute('autocomplete', 'street-address');
+                                else if (lname.includes('city')) field.setAttribute('autocomplete', 'address-level2');
+                                else if (lname.includes('state') || lname.includes('province')) field.setAttribute('autocomplete', 'address-level1');
+                                else if (lname.includes('zip') || lname.includes('postal')) field.setAttribute('autocomplete', 'postal-code');
+                                else if (lname.includes('date')) field.setAttribute('autocomplete', 'off');
+                                else if (lname.includes('time')) field.setAttribute('autocomplete', 'off');
+                                else if (lname.includes('location')) field.setAttribute('autocomplete', 'off');
+                            }
+                        });
+                        form.querySelectorAll('label:not([for])').forEach(label => {
+                            const control = label.querySelector('input, select, textarea');
+                            if (control && control.id) {
+                                label.setAttribute('for', control.id);
+                            }
+                        });
+                    });
+                } catch(e) {}
+            });
+        })();
+
+        const sidebar = document.getElementById('sidebar');
+        const openSidebarBtn = document.getElementById('open-sidebar');
+        const closeSidebarBtn = document.getElementById('close-sidebar');
+        const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+        const notificationToggle = document.getElementById('notification-toggle');
+        const notificationDropdown = document.getElementById('notification-dropdown');
+
+        function toggleSidebar(show) {
+            if (!sidebar) return;
+            if (show) {
+                sidebar.classList.add('open');
+                sidebarBackdrop?.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            } else {
+                sidebar.classList.remove('open');
+                sidebarBackdrop?.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+
+        openSidebarBtn?.addEventListener('click', () => toggleSidebar(true));
+        closeSidebarBtn?.addEventListener('click', () => toggleSidebar(false));
+        sidebarBackdrop?.addEventListener('click', () => toggleSidebar(false));
+
+        function closeNotificationMenu() {
+            notificationDropdown?.classList.remove('open');
+            if (notificationToggle) {
+                notificationToggle.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        notificationToggle?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const expanded = notificationToggle.getAttribute('aria-expanded') === 'true';
+            if (expanded) {
+                closeNotificationMenu();
+            } else {
+                notificationDropdown?.classList.add('open');
+                notificationToggle.setAttribute('aria-expanded', 'true');
+            }
+        });
+        notificationToggle?.addEventListener('keydown', (e) => onKeyToggle(notificationToggle, notificationDropdown, e));
+
+        document.addEventListener('click', (event) => {
+            if (!notificationDropdown || !notificationToggle) return;
+            if (!notificationDropdown.contains(event.target) && !notificationToggle.contains(event.target)) {
+                closeNotificationMenu();
+            }
+        });
+
+        // User dropdown toggle
+        const userBtn = document.getElementById('user-btn');
+        const userDd = document.getElementById('user-dd');
+        
+        function closeUserMenu() {
+            userDd?.classList.add('hidden');
+            if (userBtn) {
+                userBtn.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        userBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const expanded = userBtn.getAttribute('aria-expanded') === 'true';
+            if (expanded) {
+                closeUserMenu();
+            } else {
+                userDd?.classList.remove('hidden');
+                userBtn.setAttribute('aria-expanded', 'true');
+            }
+        });
+        userBtn?.addEventListener('keydown', (e) => onKeyToggle(userBtn, userDd, e));
+
+        document.addEventListener('click', (event) => {
+            if (!userDd || !userBtn) return;
+            if (!userDd.contains(event.target) && !userBtn.contains(event.target)) {
+                closeUserMenu();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const path = window.location.pathname;
+            document.querySelectorAll('.sidebar-item').forEach(link => {
+                const href = link.getAttribute('href');
+                if (!href) return;
+                if (path === href || path.startsWith(href + '/')) {
+                    link.classList.add('active');
+                }
+            });
+            const validationScript = document.createElement('script');
+            validationScript.src = "{{ url_for('static', filename='js/form-validation.js') }}";
+            document.head.appendChild(validationScript);
+        });
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 1024) {
+                toggleSidebar(false);
+            }
+            closeNotificationMenu();
+        });
+
+        // Shared notification publisher so Admin and HR are notified on applicant actions
+        (function initApplicantNotificationPublisher(){
+            const STORAGE_KEY = 'wh88_notifications';
+            const CHANNEL_NAME = 'wh88_notifications';
+            let bc;
+            try { bc = new BroadcastChannel(CHANNEL_NAME); } catch(e) { bc = null; }
+            window.publishNotification = function(note) {
+                const now = new Date();
+                const payload = {
+                    title: note.title || 'New Application',
+                    message: note.message || '',
+                    time: note.time || now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    ts: now.toISOString()
+                };
+                try {
+                    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+                    existing.unshift(payload);
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(existing.slice(0, 50)));
+                    localStorage.setItem(STORAGE_KEY + '_ping', String(now.getTime()));
+                } catch(e) {}
+                if (bc) { try { bc.postMessage(payload); } catch(e) {} }
+            };
+            // If the backend flashed a success containing "Application submitted", or a session flag exists, publish once
+            document.addEventListener('DOMContentLoaded', function() {
+                const flash = Array.from(document.querySelectorAll('.flash-message')).map(el => el.textContent || '').join(' ').toLowerCase();
+                let flagged = null;
+                try { flagged = JSON.parse(sessionStorage.getItem('wh88_notify_application') || 'null'); } catch(e) { flagged = null; }
+                const shouldNotify = flash.includes('application submitted') || flash.includes('application has been submitted') || !!flagged;
+                if (shouldNotify) {
+                    const jobTitle = flagged && flagged.jobTitle ? flagged.jobTitle : (document.querySelector('[data-job-title]')?.getAttribute('data-job-title') || '');
+                    window.publishNotification({
+                        title: 'New Application Submitted',
+                        message: jobTitle ? `An application was submitted for ${jobTitle}.` : 'A new application has been submitted.'
+                    });
+                }
+                if (flagged) { try { sessionStorage.removeItem('wh88_notify_application'); } catch(e) {} }
+            });
+        })();
+    </script>
+    <!-- Global Confirmation Modal -->
+    <div id="global-confirm-modal" class="modal-overlay hidden">
+        <div class="modal-content max-w-lg">
+            <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 z-10">
+                <h3 class="text-lg sm:text-xl font-bold">Please Confirm</h3>
+                <button onclick="confirmModalCancel()" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            <div class="p-4 sm:p-6">
+                <p id="global-confirm-message" class="text-sm text-gray-300 mb-4">Are you sure?</p>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="confirmModalCancel()" class="px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium">Cancel</button>
+                    <button type="button" id="global-confirm-btn" onclick="confirmModalSubmit()" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    window._confirmFormToSubmit = null;
+    window._confirmCallback = null;
+    window.openConfirmOnFormSubmit = function(form, msg) {
+        window._confirmFormToSubmit = form;
+        window._confirmCallback = null;
+        var el = document.getElementById('global-confirm-message');
+        if (el) el.textContent = msg || 'Are you sure?';
+        var modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+        return false;
+    };
+    window.openConfirmWithCallback = function(cb, msg) {
+        window._confirmCallback = cb;
+        window._confirmFormToSubmit = null;
+        var el = document.getElementById('global-confirm-message');
+        if (el) el.textContent = msg || 'Are you sure?';
+        var modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window._confirmModifiedButton = null;
+    window.confirmModalSubmit = function() {
+        try {
+            if (window._confirmCallback && typeof window._confirmCallback === 'function') {
+                window._confirmCallback();
+                window._confirmCallback = null;
+            } else if (window._confirmFormToSubmit) {
+                var f = window._confirmFormToSubmit;
+                window._confirmFormToSubmit = null;
+                try {
+                    if (!f.hasAttribute('data-no-loading')) {
+                        var btn = f.querySelector('button[type=submit], input[type=submit]');
+                        if (btn) {
+                            btn.disabled = true;
+                            if (btn.tagName.toLowerCase() === 'button') btn.dataset.origHtml = btn.innerHTML;
+                            btn.innerHTML = '<span class="spinner-border" style="width:1rem;height:1rem;display:inline-block;vertical-align:middle;margin-right:.5rem;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin 0.75s linear infinite"></span>Loading...';
+                            btn.dataset.wasLoadingApplied = '1';
+                            window._confirmModifiedButton = btn;
+                        }
+                    }
+                } catch(e) { console.error(e); }
+                setTimeout(function() { f.submit(); }, 80);
+            }
+        } catch (e) {
+            console.error('Confirm modal submit error:', e);
+        }
+        confirmModalCancel();
+    };
+    window.confirmModalCancel = function() {
+        try {
+            if (window._confirmModifiedButton) {
+                try {
+                    var b = window._confirmModifiedButton;
+                    if (b.dataset.origHtml) b.innerHTML = b.dataset.origHtml;
+                    b.disabled = false;
+                    delete b.dataset.origHtml;
+                    delete b.dataset.wasLoadingApplied;
+                } catch(e) { console.error('Restore button error', e); }
+                window._confirmModifiedButton = null;
+            }
+        } catch(e) { console.error(e); }
+        window._confirmFormToSubmit = null;
+        window._confirmCallback = null;
+        var modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.add('hidden');
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+    };
+    </script>
+    <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

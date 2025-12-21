@@ -1,0 +1,173 @@
+{% extends "hr/_base.html" %}
+
+{% block title %}Archived Applicants • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+  .card { background: rgba(17,24,39,0.95); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.03); }
+  .archived-row { opacity: 0.9; }
+  .muted { color: #9ca3af; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set archived = archived if archived is defined else [] %}
+{% set branches = branches if branches is defined else [] %}
+
+<header class="card rounded-2xl p-6 mb-6 shadow-lg border border-red-600/10">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-white">Archived Applicants</h1>
+      <p class="text-sm muted">View and manage archived / removed applicants</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{{ url_for('applicants') }}" class="px-4 py-2 rounded-lg bg-gray-800 text-white text-sm">Back to Applicants</a>
+    </div>
+  </div>
+</header>
+
+<section class="card p-6 mb-6 border border-gray-800">
+  <div class="flex gap-3 items-center mb-4">
+    <div class="flex-1">
+      <input id="arch-search" type="text" placeholder="Search archived applicants by name, email or job" class="w-full px-4 py-2 rounded-lg bg-gray-800/60 border border-gray-700 text-white" />
+    </div>
+    {% if not (current_user and current_user.role == 'hr' and current_user.branch_id) %}
+    <div>
+      <select id="filter-branch" class="px-3 py-2 rounded-lg bg-gray-800/60 border border-gray-700 text-white">
+        <option value="">All Branches</option>
+        {% for branch in branches %}
+        <option value="{{ branch.branch_id }}">{{ branch.branch_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="text-left text-xs text-gray-400 border-b border-gray-700">
+        <tr>
+          <th class="px-4 py-3">Applicant</th>
+          <th class="px-4 py-3">Position</th>
+          <th class="px-4 py-3">Branch</th>
+          <th class="px-4 py-3">Resume</th>
+          <th class="px-4 py-3">Archived At</th>
+          <th class="px-4 py-3 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-800">
+        {% for a in archived %}
+        <tr class="archived-row" data-name="{{ (a.applicant_name or '')|lower }}" data-email="{{ (a.applicant_email or '')|lower }}" data-position="{{ (a.job_title or '')|lower }}" data-branch-id="{{ a.branch_id or '' }}">
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white">
+                <i class="fas fa-user"></i>
+              </div>
+              <div>
+                <div class="font-semibold text-white">{{ a.applicant_name }}</div>
+                <div class="text-xs muted">{{ a.applicant_email }}</div>
+              </div>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-white">{{ a.job_title or '' }}</td>
+          <td class="px-4 py-3 text-white">{{ a.branch_name or 'All Branches' }}</td>
+          <td class="px-4 py-3 text-white">
+            {% if a.has_resume and a.resume_id %}
+            <div class="flex items-center gap-1.5">
+              {% set _docs_count = a.total_documents if (a.total_documents is defined and a.total_documents is not none) else count_uploaded_documents(application_id=a.application_id) %}
+              {% if _docs_count|int > 0 %}
+              <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold bg-gray-800/60 text-white rounded-full border border-gray-700 mr-2" title="Documents uploaded">{{ _docs_count }}</span>
+              {% endif %}
+              <a href="{{ url_for('admin_download_resume', resume_id=a.resume_id) }}" class="text-sm text-blue-300 hover:underline">Download</a>
+            </div>
+            {% else %}
+            <span class="muted text-xs italic">No resume</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 muted">{{ a.archived_at or a.submitted_at }}</td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex items-center justify-end gap-2">
+              <form method="POST" action="{{ url_for('restore_applicant') }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="application_id" value="{{ a.application_id }}">
+                <button type="submit" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors">
+                  Restore
+                </button>
+              </form>
+              <form method="POST" action="{{ url_for('delete_applicant_permanent') }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="application_id" value="{{ a.application_id }}">
+                <button type="submit" 
+                        onclick="return confirm('Permanently delete this applicant? This cannot be undone.');" 
+                        class="px-3 py-1.5 bg-red-700 text-white rounded-lg text-sm hover:bg-red-800 transition-colors">
+                  Delete
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="px-4 py-12 text-center muted">
+            <i class="fas fa-archive text-4xl mb-4"></i>
+            <div class="text-lg font-semibold">No archived applicants</div>
+            <div class="text-sm">Archived applicants will appear here when you archive or remove candidates.</div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Search & branch filter functionality
+  const searchInput = document.getElementById('arch-search');
+  const filterBranch = document.getElementById('filter-branch');
+  const tableRows = document.querySelectorAll('tbody tr[data-name]');
+  const noDataRow = document.querySelector('tbody tr:not([data-name])');
+
+  function applyFilters() {
+    const searchTerm = (searchInput && searchInput.value || '').toLowerCase().trim();
+    const selectedBranch = filterBranch && filterBranch.value || '';
+    let visibleCount = 0;
+    
+    tableRows.forEach(row => {
+      const name = row.getAttribute('data-name') || '';
+      const email = row.getAttribute('data-email') || '';
+      const position = row.getAttribute('data-position') || '';
+      const branchId = row.getAttribute('data-branch-id') || '';
+      
+      const matchesSearch = searchTerm === '' || 
+                           name.includes(searchTerm) || 
+                           email.includes(searchTerm) || 
+                           position.includes(searchTerm);
+      const matchesBranch = selectedBranch === '' || branchId === selectedBranch;
+      const shouldShow = matchesSearch && matchesBranch;
+      
+      row.style.display = shouldShow ? '' : 'none';
+      if (shouldShow) visibleCount++;
+    });
+    
+    if (noDataRow) {
+      noDataRow.style.display = visibleCount === 0 ? '' : 'none';
+    }
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', applyFilters);
+  }
+  
+  if (filterBranch) {
+    filterBranch.addEventListener('change', applyFilters);
+  }
+  
+  // Apply initial filters
+  applyFilters();
+});
+</script>
+{% endblock %}

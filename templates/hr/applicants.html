@@ -1,0 +1,449 @@
+{% extends "hr/_base.html" %}
+
+{% block title %}Applicants • J&T Express{% endblock %}
+
+{% block extra_css %}
+<style>
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    overflow-y: auto;
+    padding: 1rem;
+  }
+  .modal-content {
+    width: 100%;
+    max-width: 80rem;
+    max-height: 95vh;
+    background: rgba(17,24,39,0.98);
+    border: 1px solid rgba(220,38,38,0.3);
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    overflow-y: auto;
+    margin: auto;
+  }
+  .candidate-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .candidate-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(220,38,38,0.2);
+  }
+  .pipeline-stage {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .pipeline-stage.active {
+    background: rgba(220,38,38,0.2);
+    border-color: rgba(220,38,38,0.5);
+  }
+  /* Status dropdown styling for better visibility */
+  .status-select {
+    font-weight: 600;
+    text-align: center;
+  }
+  .status-select:not(:disabled):hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .status-select:not(:disabled):focus {
+    box-shadow: 0 0 0 3px rgba(220,38,38,0.3);
+  }
+  .status-select option {
+    background: #1f2937;
+    color: #ffffff;
+    padding: 0.5rem;
+    font-weight: 500;
+  }
+  .status-select option[value="pending"] {
+    background: #78350f;
+    color: #fef3c7;
+  }
+  .status-select option[value="scheduled"] {
+    background: #581c87;
+    color: #e9d5ff;
+  }
+  .status-select option[value="interviewed"] {
+    background: #164e63;
+    color: #a5f3fc;
+  }
+  .status-select option[value="hired"] {
+    background: #14532d;
+    color: #bbf7d0;
+  }
+  .status-select option[value="rejected"] {
+    background: #7f1d1d;
+    color: #fecaca;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set applications = applications if applications is defined else [] %}
+{% set stats = stats if stats is defined else {} %}
+{% set filters = filters if filters is defined else {} %}
+{% set positions = positions if positions is defined else [] %}
+{% set view_mode = filters.get('view_mode', 'list') if filters is defined else 'list' %}
+{% set branches = branches if branches is defined else [] %}
+{% set jobs = jobs if jobs is defined else [] %}
+{% set branch_info = branch_info if branch_info is defined else (dashboard_data.branch_info if dashboard_data is defined and dashboard_data else None) %}
+
+<!-- 1. HEADER: Candidates + Add Candidate Button -->
+<header class="card rounded-2xl bg-gradient-to-r from-black via-gray-900 to-gray-900 p-6 mb-6 shadow-lg border border-red-600/20">
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+      <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2">Applicants</h1>
+      <p class="text-gray-400 text-sm">Manage and track all applicants across all branches</p>
+    </div>
+    <div class="flex gap-3">
+        </div>
+    </div>
+</header>
+
+<!-- 2. FILTERS -->
+<section class="card rounded-2xl bg-gray-900/80 p-6 mb-6 border border-gray-800">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+      <i class="fas fa-filter text-red-500"></i>
+      Filter Applicants
+    </h3>
+  </div>
+  <div class="flex flex-col sm:flex-row gap-3">
+    <!-- Search -->
+    <div class="relative flex-1">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+      <label for="search-input" class="sr-only">Search applicants</label>
+      <input 
+        type="text" 
+        id="search-input"
+        name="search"
+        autocomplete="off"
+        placeholder="Search by name, email, job position..." 
+        aria-label="Search applicants"
+        class="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none placeholder-gray-500"
+      >
+    </div>
+    
+    <!-- Status Filter -->
+    <div>
+      <label for="status-filter" class="sr-only">Filter by status</label>
+      <select id="status-filter" name="status" class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 outline-none">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="interviewed">Interviewed</option>
+        <option value="hired">Hired</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+
+    <!-- Branch Filter: hidden for HR users assigned to a specific branch -->
+    {% if branches and not (current_user and current_user.role == 'hr' and current_user.branch_id) %}
+    <div>
+      <label for="branch-filter" class="sr-only">Filter by branch</label>
+      <select id="branch-filter" name="branch_id" class="bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 outline-none">
+        <option value="">All Branches</option>
+        {% for branch in branches %}
+        <option value="{{ branch.branch_id }}">{{ branch.branch_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- 4. CANDIDATES LIST/TABLE VIEW -->
+{% if view_mode == 'list' %}
+<section class="card rounded-2xl bg-gray-900/80 border border-gray-800 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-800/70 text-gray-300 uppercase text-xs border-b border-gray-700">
+        <tr>
+          <th class="px-6 py-4 text-left">Applicant</th>
+          <th class="px-6 py-4 text-left">Job Position Applied</th>
+          <th class="px-6 py-4 text-left">Branch</th>
+          <th class="px-6 py-4 text-left">Resume</th>
+          <th class="px-6 py-4 text-left">Date Submitted</th>
+          <th class="px-6 py-4 text-center">Status</th>
+          <th class="px-6 py-4 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                {% for app in applications %}
+        {% set status = (app.status or 'pending')|lower %}
+        <tr class="applicant-row hover:bg-gray-800/50 transition-colors" 
+            data-name="{{ (app.applicant_name or '')|lower }}" 
+            data-email="{{ (app.applicant_email or '')|lower }}"
+            data-position="{{ (app.job_title or '')|lower }}"
+            data-status="{{ status }}"
+            data-branch-id="{{ app.branch_id or '' }}">
+          <td class="px-6 py-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-red-600/20 border border-red-600/30 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-user text-red-300"></i>
+              </div>
+                        <div>
+                <p class="font-semibold text-white">{{ app.applicant_name }}</p>
+                
+              </div>
+                        </div>
+                    </td>
+          <td class="px-6 py-4 text-gray-300">
+            <p class="font-medium text-white">{{ app.job_title }}</p>
+                    </td>
+          <td class="px-6 py-4 text-gray-300">
+            <p class="text-sm text-white font-medium">{{ app.branch_name }}</p>
+                    </td>
+          <td class="px-6 py-4 text-gray-300">
+            <div class="flex items-center gap-2">
+                  <a href="{{ url_for('view_applicant', applicant_id=app.applicant_id) }}"
+                 class="px-2 py-1 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/20 hover:border-blue-600/40 transition-colors flex items-center gap-1 rounded" 
+                 title="View Applicant Details">
+                <i class="fas fa-eye"></i>
+                <span>View</span>
+              </a>
+              {# Resume badge removed; resume access is via View/Download controls elsewhere #}
+            </div>
+          </td>
+          <td class="px-6 py-4 text-gray-300">{{ app.submitted_at }}</td>
+          <td class="px-6 py-4 text-center">
+            {% set status_normalized = status %}
+            {% if status in ['reviewed', 'applied', 'under_review'] %}
+              {% set status_normalized = 'pending' %}
+            {% elif status == 'accepted' %}
+              {% set status_normalized = 'hired' %}
+            {% elif status == 'interview' %}
+              {% set status_normalized = 'interviewed' %}
+            {% endif %}
+            {% set is_locked = (status_normalized == 'hired' or status_normalized == 'rejected') %}
+            <form method="POST" action="{{ url_for('applicants') }}" class="status-update-form inline-block" data-application-id="{{ app.application_id }}" data-current-status="{{ status_normalized }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="bulk_update_status">
+              <input type="hidden" name="application_ids" value="{{ app.application_id }}">
+              <select 
+                name="bulk_status" 
+                class="status-select min-w-[140px] px-4 py-2 rounded-lg text-sm font-semibold border-2 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500/50 {% if status_normalized == 'pending' %}bg-yellow-600/30 text-yellow-200 border-yellow-600/60 hover:bg-yellow-600/40{% elif status_normalized == 'scheduled' %}bg-purple-600/30 text-purple-200 border-purple-600/60 hover:bg-purple-600/40{% elif status_normalized == 'interviewed' %}bg-cyan-600/30 text-cyan-200 border-cyan-600/60 hover:bg-cyan-600/40{% elif status_normalized == 'hired' %}bg-green-600/30 text-green-200 border-green-600/60{% elif status_normalized == 'rejected' %}bg-red-600/30 text-red-200 border-red-600/60{% else %}bg-gray-600/30 text-gray-200 border-gray-600/60 hover:bg-gray-600/40{% endif %} {% if is_locked %}opacity-75 cursor-not-allowed{% endif %}"
+                {% if is_locked %}disabled title="This status cannot be changed"{% endif %}
+                style="appearance: auto; -webkit-appearance: menulist; -moz-appearance: menulist;"
+              >
+                <option value="pending" {% if status_normalized == 'pending' %}selected{% endif %} {% if status_normalized == 'interviewed' or status_normalized == 'scheduled' %}disabled{% endif %}>Pending</option>
+                <option value="scheduled" {% if status_normalized == 'scheduled' %}selected{% endif %} {% if status_normalized == 'interviewed' %}disabled{% endif %}>Scheduled</option>
+                <option value="interviewed" {% if status_normalized == 'interviewed' %}selected{% endif %}>Interviewed</option>
+                <option value="hired" {% if status_normalized == 'hired' %}selected{% endif %}>Hired</option>
+                <option value="rejected" {% if status_normalized == 'rejected' %}selected{% endif %}>Rejected</option>
+              </select>
+            </form>
+          </td>
+          <td class="px-6 py-4 text-right">
+            <div class="flex items-center justify-end gap-2">
+              <a href="{{ url_for('hr_interviews') }}?application_id={{ app.application_id }}" class="px-3 py-1.5 text-xs bg-red-600/20 hover:bg-red-600/30 text-red-300 rounded-lg transition-colors border border-red-600/40" title="Schedule Interview">
+                <i class="fas fa-calendar-plus"></i>
+              </a>
+              <form method="POST" action="{{ url_for('archive_applicant', application_id=app.application_id) }}" class="inline" data-auto-archive="true" data-redirect="{{ url_for('archived_applicants') }}" onsubmit="event.preventDefault(); archiveFormSubmit(this);">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="px-3 py-1.5 text-xs bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 rounded-lg transition-colors border border-orange-600/40" title="Archive Applicant">
+                  <i class="fas fa-archive"></i>
+                </button>
+              </form>
+              <!-- Permanent delete (HR only) -->
+              <form method="POST" action="{{ url_for('delete_applicant_now', application_id=app.application_id) }}" class="inline" onsubmit="return openConfirmOnFormSubmit(this, 'Permanently delete this application? This cannot be undone.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="px-3 py-1.5 text-xs bg-red-700/10 hover:bg-red-700/20 text-red-300 rounded-lg transition-colors border border-red-700/30" title="Delete Applicant">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+                </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-6 py-16 text-center text-gray-400">
+            <i class="fas fa-users text-4xl mb-4 text-gray-600"></i>
+            <p class="text-lg font-semibold">No candidates found</p>
+            <p class="text-sm text-gray-500 mt-2">Adjust your filters or check back later</p>
+          </td>
+        </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Data source for client-side features
+const candidateData = {{ applications|tojson|safe }};
+
+// (removed modal helpers and inline candidate-profile rendering)
+
+// Tab switching
+window.showTab = function(tabName) {
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+  document.querySelectorAll('.tab-button').forEach(btn => {
+    btn.classList.remove('text-gray-300', 'border-red-600');
+    btn.classList.add('text-gray-400', 'border-transparent');
+  });
+  
+  document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+  document.querySelector(`[data-tab="${tabName}"]`).classList.remove('text-gray-400', 'border-transparent');
+  document.querySelector(`[data-tab="${tabName}"]`).classList.add('text-gray-300', 'border-red-600');
+}
+
+// Search and filter functionality
+document.addEventListener('DOMContentLoaded', function() {
+  // Handle status form submissions with confirmation
+  const statusForms = document.querySelectorAll('.status-update-form');
+  statusForms.forEach(form => {
+    const select = form.querySelector('.status-select');
+    if (select && !select.disabled) {
+      // Store original value (use let so it can be updated after confirm)
+      let originalValue = select.value;
+      
+      select.addEventListener('change', function(e) {
+        const newStatus = this.value;
+        const statusLabels = {
+          'pending': 'Pending',
+          'scheduled': 'Scheduled',
+          'interviewed': 'Interviewed',
+          'hired': 'Hired',
+          'rejected': 'Rejected'
+        };
+        const confirmMsg = `Are you sure you want to change the status to "${statusLabels[newStatus]}"?`;
+        // Revert UI until user confirms via modal
+        this.value = originalValue;
+        openConfirmWithCallback(function() {
+          // Update the stored originalValue and submit
+          originalValue = newStatus;
+          try { select.form.submit(); } catch (err) { console.error(err); }
+        }, confirmMsg);
+      });
+    }
+  });
+  const searchInput = document.getElementById('search-input');
+  const statusFilter = document.getElementById('status-filter');
+  const branchFilter = document.getElementById('branch-filter');
+  const applicantRows = document.querySelectorAll('.applicant-row');
+  const params = new URLSearchParams(window.location.search);
+
+  // Initialize filters from URL params if present
+  const initStatus = params.get('status');
+  const initBranch = params.get('branch_id');
+  if (statusFilter && initStatus !== null) statusFilter.value = initStatus;
+  if (branchFilter && initBranch !== null) branchFilter.value = initBranch;
+  
+  function applyFilters() {
+    const searchTerm = (searchInput?.value || '').toLowerCase();
+    const statusValue = statusFilter?.value || '';
+    const branchValue = branchFilter?.value || '';
+    
+    // Status normalization map (database status -> display status)
+    const statusMap = {
+      'pending': 'pending',
+      'reviewed': 'pending',
+      'shortlisted': 'pending',
+      'applied': 'pending',
+      'under_review': 'pending',
+      'scheduled': 'scheduled',
+      'interviewed': 'interviewed',
+      'interview': 'interviewed',
+      'hired': 'hired',
+      'accepted': 'hired',
+      'rejected': 'rejected',
+    };
+    
+    applicantRows.forEach(row => {
+      const name = row.dataset.name || '';
+      const email = row.dataset.email || '';
+      const position = row.dataset.position || '';
+      const rawStatus = (row.dataset.status || 'pending').toLowerCase();
+      const normalizedStatus = statusMap[rawStatus] || 'pending';
+      
+      // Get branch ID - handle both data-branch-id attribute and numeric/string conversion
+      const branchIdAttr = row.getAttribute('data-branch-id');
+      const branchId = branchIdAttr ? String(branchIdAttr).trim() : '';
+      const filterBranchId = branchValue ? String(branchValue).trim() : '';
+      
+      // Check search term match
+      const matchesSearch = !searchTerm || 
+        name.includes(searchTerm) || 
+        email.includes(searchTerm) || 
+        position.includes(searchTerm);
+      
+      // Check status match (normalize both values before comparison)
+      const matchesStatus = !statusValue || statusValue === '' || normalizedStatus === statusValue;
+      
+      // Check branch match - handle both string and numeric comparison
+      let matchesBranch = true;
+      if (branchValue && branchValue !== '') {
+        // Compare as both string and number to handle type mismatches
+        const branchIdNum = branchId ? parseInt(branchId, 10) : null;
+        const filterBranchIdNum = filterBranchId ? parseInt(filterBranchId, 10) : null;
+        matchesBranch = branchId === filterBranchId || 
+                       (branchIdNum !== null && filterBranchIdNum !== null && branchIdNum === filterBranchIdNum);
+      }
+      
+      // Show row only if it matches all active filters
+      row.style.display = matchesSearch && matchesStatus && matchesBranch ? '' : 'none';
+    });
+    
+    // Update results count
+    const visibleRows = Array.from(applicantRows).filter(row => row.style.display !== 'none');
+    // You can add a results counter here if needed
+  }
+  
+  // Apply filters when any filter changes
+  if (searchInput) {
+    searchInput.addEventListener('input', applyFilters);
+  }
+  if (statusFilter) {
+    statusFilter.addEventListener('change', applyFilters);
+  }
+  if (branchFilter) {
+    branchFilter.addEventListener('change', applyFilters);
+  }
+  
+  // Apply filters on page load to handle any initial filter states
+  applyFilters();
+  
+  // Modal handlers removed (modal was deleted from this template)
+});
+  
+  // Export candidates
+window.exportCandidates = function() {
+  const candidatesToExport = candidateData;
+  const headers = ['Name', 'Email', 'Phone', 'Job Position', 'Status', 'Application Date'];
+  const rows = candidatesToExport.map(c => [
+    c.applicant_name || '',
+    c.applicant_email || '',
+    c.applicant_phone || '',
+    c.position_name || c.job_title || '',
+    c.status || '',
+    c.submitted_at || ''
+  ]);
+  
+  const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `candidates_export_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+</script>
+
+<!-- Archive direct fallback removed - use global submit/click interceptors in base templates for immediate archive + redirect -->
+
+{% endblock %}
