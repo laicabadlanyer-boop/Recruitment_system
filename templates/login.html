@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - J&T Express</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpeg') }}" type="image/jpeg">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo.jpeg') }}" type="image/jpeg">
+    <!-- Suppress Tailwind CDN warning -->
+    <script>
+        (function() {
+            if (typeof console !== 'undefined') {
+                const originalWarn = console.warn || function() {};
+                const originalError = console.error || function() {};
+                
+                console.warn = function(...args) {
+                    const message = args[0];
+                    if (typeof message === 'string' && (
+                        message.includes('cdn.tailwindcss.com') ||
+                        message.includes('should not be used in production') ||
+                        message.includes('Tailwind CSS')
+                    )) {
+                        return;
+                    }
+                    originalWarn.apply(console, args);
+                };
+                
+                console.error = function(...args) {
+                    const message = args[0];
+                    if (typeof message === 'string' && (
+                        message.includes('cdn.tailwindcss.com') ||
+                        message.includes('should not be used in production') ||
+                        message.includes('Tailwind CSS')
+                    )) {
+                        return;
+                    }
+                    originalError.apply(console, args);
+                };
+            }
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        body {
+            background: #0a0a0a;
+        }
+        
+        .btn-primary-custom {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 38, 38, 0.4);
+        }
+        
+        .role-option {
+            transition: all 0.2s ease;
+        }
+        
+        .role-option:hover {
+            background-color: rgba(55, 65, 81, 0.8);
+        }
+        
+        .bg-gray-750 {
+            background-color: rgba(55, 65, 81, 0.8);
+        }
+
+        /* Hide browser's default password reveal icon (Edge/IE and some Chromium builds) */
+        input[type="password"]::-ms-reveal,
+        input[type="password"]::-ms-clear {
+            display: none;
+        }
+        /* Best-effort hide for some WebKit variants */
+        input[type="password"]::-webkit-textfield-decoration-container,
+        input[type="password"]::-webkit-credentials-auto-fill-button {
+            visibility: hidden;
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-black border-b-2 border-red-600 shadow-lg shadow-red-600/30 sticky top-0 z-50">
+        <div class="container mx-auto px-4">
+            <div class="flex justify-between items-center py-5">
+                <!-- Logo -->
+                <a href="/" class="flex items-center space-x-3">
+                    <img src="{{ url_for('static', filename='images/logo.jpeg') }}" alt="WHITEHAT 88 Logo" class="w-12 h-12 rounded-full">
+                    <div>
+                        <span class="text-white-600 font-bold text-xl">J&T Express</span>
+                        <span class="block text-gray-400 text-xs -mt-1">Delivery Services</span>
+                    </div>
+                </a>
+
+                <!-- Desktop Menu -->
+                <div class="hidden lg:flex items-center space-x-8">
+                    <!-- Home Link -->
+                    <a href="{{ url_for('index') }}" class="flex items-center space-x-2 text-red-400 hover:text-red-300 transition-colors">
+                        <i class="fas fa-home"></i>
+                        <span>Home</span>
+                    </a>
+                    
+                    <!-- Login with Icon -->
+                    <a href="{{ url_for('login') }}" class="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Login</span>
+                    </a>
+                    
+                    <!-- Register with Icon -->
+                    <a href="{{ url_for('register') }}" class="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-semibold transition-all">
+                        <i class="fas fa-user-plus"></i>
+                        <span>Register</span>
+                    </a>
+
+                    <!-- About Us Link with 4 People Icon (Last in navigation) -->
+                    <a href="{{ url_for('about') }}" class="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-users"></i>
+                        <span>About Us</span>
+                    </a>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <button id="mobile-menu-btn" class="lg:hidden bg-gray-800 p-2 rounded" aria-controls="mobile-menu" aria-expanded="false">
+                    <i class="fas fa-bars text-white"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Mobile Menu Drawer -->
+    <div id="mobile-menu" class="lg:hidden fixed inset-0 z-50 hidden">
+        <!-- Overlay -->
+        <div id="mobile-menu-overlay" class="absolute inset-0 bg-black/60"></div>
+        <!-- Drawer -->
+        <div class="absolute top-0 right-0 w-64 h-full bg-gray-900 border-l border-gray-700 p-4 shadow-xl shadow-red-600/30">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                    <img src="{{ url_for('static', filename='images/logo.jpeg') }}" alt="WHITEHAT 88 Logo" class="w-8 h-8 rounded-full">
+                    <span class="text-white font-semibold">Menu</span>
+                </div>
+                <button id="mobile-menu-close" class="p-2 rounded bg-gray-800 hover:bg-gray-700">
+                    <i class="fas fa-times text-white"></i>
+                </button>
+            </div>
+            <nav class="space-y-2">
+                <a href="{{ url_for('index') }}" class="flex items-center space-x-2 p-2 rounded hover:bg-gray-800 text-red-400 hover:text-red-300">
+                    <i class="fas fa-home"></i>
+                    <span>Home</span>
+                </a>
+                <a href="{{ url_for('login') }}" class="flex items-center space-x-2 p-2 rounded hover:bg-gray-800 text-gray-300 hover:text-white">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Login</span>
+                </a>
+                <a href="{{ url_for('register') }}" class="flex items-center space-x-2 p-2 rounded bg-red-600 hover:bg-red-700 text-white">
+                    <i class="fas fa-user-plus"></i>
+                    <span>Register</span>
+                </a>
+                <a href="{{ url_for('about') }}" class="flex items-center space-x-2 p-2 rounded hover:bg-gray-800 text-gray-300 hover:text-white">
+                    <i class="fas fa-users"></i>
+                    <span>About Us</span>
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Login Content -->
+    <div class="min-h-screen flex items-center justify-center bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+            <div>
+                <div class="flex justify-center">
+                    <img src="{{ url_for('static', filename='images/logo.jpeg') }}" alt="WHITEHAT 88 Logo" class="w-16 h-16 rounded-full">
+                </div>
+                <h2 class="mt-6 text-center text-3xl font-extrabold text-white">
+                    Sign in to your account
+                </h2>
+                <p class="mt-2 text-center text-sm text-gray-400">
+                    Access the recruitment system
+                </p>
+            </div>
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% set flash_classes = {
+                        'error': 'bg-red-900/80 text-red-200 border border-red-500/40',
+                        'success': 'bg-green-900/80 text-green-200 border border-green-500/40',
+                        'warning': 'bg-yellow-900/80 text-yellow-200 border border-yellow-500/40',
+                        'info': 'bg-blue-900/80 text-blue-200 border border-blue-500/40'
+                    } %}
+                    {% for category, message in messages %}
+                        <div class="p-4 rounded-lg text-sm {{ flash_classes.get(category, 'bg-gray-800/80 text-gray-200 border border-gray-600/40') }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form class="mt-8 space-y-6" method="POST" action="{{ url_for('login') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="space-y-4">
+                    <!-- Role Selection - Moved to top -->
+                    <div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <!-- Applicant Option -->
+                            <div class="relative">
+                                <input type="radio" id="user_type_applicant" name="user_type" value="applicant" class="sr-only" checked>
+                                <label for="user_type_applicant" class="flex flex-col items-center p-3 border-2 border-gray-700 rounded-lg cursor-pointer bg-gray-800 hover:bg-gray-750 transition-colors role-option">
+                                    <i class="fas fa-user text-red-400 text-xl mb-2"></i>
+                                    <span class="text-xs font-medium text-white">Applicant</span>
+                                </label>
+                            </div>
+                            
+                            <!-- HR Option -->
+                            <div class="relative">
+                                <input type="radio" id="user_type_hr" name="user_type" value="hr" class="sr-only">
+                                <label for="user_type_hr" class="flex flex-col items-center p-3 border-2 border-gray-700 rounded-lg cursor-pointer bg-gray-800 hover:bg-gray-750 transition-colors role-option">
+                                    <i class="fas fa-users text-red-400 text-xl mb-2"></i>
+                                    <span class="text-xs font-medium text-white">HR</span>
+                                </label>
+                            </div>
+                            
+                            <!-- Admin Option -->
+                            <div class="relative">
+                                <input type="radio" id="user_type_admin" name="user_type" value="admin" class="sr-only">
+                                <label for="user_type_admin" class="flex flex-col items-center p-3 border-2 border-gray-700 rounded-lg cursor-pointer bg-gray-800 hover:bg-gray-750 transition-colors role-option">
+                                    <i class="fas fa-cog text-red-400 text-xl mb-2"></i>
+                                    <span class="text-xs font-medium text-white">Admin</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Email Field -->
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-300 mb-1">Email address</label>
+                        <input id="email" name="email" type="email" autocomplete="email" required 
+                               class="appearance-none relative block w-full px-3 py-3 border border-gray-700 bg-gray-800 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                               placeholder="Enter your email"
+                               value="{{ request.form.get('email', '') }}">
+                    </div>
+
+                    <!-- Hidden username field for password autofill accessibility -->
+                    <input type="text" name="username" id="username" autocomplete="username" value="" style="position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0;" tabindex="-1" aria-hidden="true">
+                    
+                    <!-- Password Field -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label for="password" class="block text-sm font-medium text-gray-300">Password</label>
+                            <a id="forgot-password-link" href="{{ url_for('forgot_password') }}" class="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors">
+                                Forgot?
+                            </a>
+                        </div>
+                        <div class="relative">
+                            <input id="password" name="password" type="password" autocomplete="current-password" required 
+                                   class="appearance-none relative block w-full px-3 py-3 border border-gray-700 bg-gray-800 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 sm:text-sm pr-11"
+                                   placeholder="Enter your password">
+                            <button type="button" class="toggle-password absolute inset-y-0 right-0 px-3 text-gray-400 hover:text-white focus:outline-none" data-target="password" aria-label="Toggle password visibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <button type="submit" 
+                            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 btn-primary-custom">
+                        <i class="fas fa-sign-in-alt mr-2"></i>
+                        Sign in
+                    </button>
+                </div>
+
+                <!-- Registration Link (Only shown for Applicant) -->
+                <div id="registration-link" class="text-center">
+                    <a href="{{ url_for('register') }}" class="font-medium text-red-400 hover:text-red-300 transition-colors">
+                        Don't have an account? Register here
+                    </a>
+                </div>
+
+                <!-- Resend Verification Link (Only shown for Applicant) -->
+                <div id="resend-verification-link" class="text-center">
+                    <a href="{{ url_for('resend_verification') }}" class="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">
+                        <i class="fas fa-envelope mr-1"></i>
+                        Didn't receive verification email?
+                    </a>
+                </div>
+
+                <!-- HR Message (Only shown for HR) -->
+                <div id="hr-message" class="hidden text-center">
+                    <p class="text-sm text-gray-400">
+                        HR accounts are managed by system administrators.
+                        <br>Contact your administrator for account access.
+                    </p>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const roleOptions = document.querySelectorAll('input[name="user_type"]');
+            const registrationLink = document.getElementById('registration-link');
+            const hrMessage = document.getElementById('hr-message');
+            const resendVerificationLink = document.getElementById('resend-verification-link');
+            const applicantActions = document.getElementById('applicant-actions');
+            const forgotPasswordLink = document.getElementById('forgot-password-link');
+            // Mobile menu elements
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const mobileMenu = document.getElementById('mobile-menu');
+            const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
+            const mobileMenuClose = document.getElementById('mobile-menu-close');
+            
+            // Function to update UI based on role selection
+            function updateRoleUI() {
+                // Reset all options
+                document.querySelectorAll('.role-option').forEach(option => {
+                    option.classList.remove('border-red-500', 'bg-red-900/20');
+                });
+                
+                // Find selected option and update its appearance
+                roleOptions.forEach(option => {
+                    if (option.checked) {
+                        const label = option.nextElementSibling;
+                        label.classList.add('border-red-500', 'bg-red-900/20');
+                        
+                        // Show/hide elements based on role
+                        if (option.value === 'applicant') {
+                            registrationLink.classList.remove('hidden');
+                            hrMessage.classList.add('hidden');
+                            if (resendVerificationLink) {
+                                resendVerificationLink.classList.remove('hidden');
+                            }
+                            if (applicantActions) {
+                                applicantActions.classList.remove('hidden');
+                            }
+                        } else if (option.value === 'hr') {
+                            registrationLink.classList.add('hidden');
+                            hrMessage.classList.remove('hidden');
+                            if (resendVerificationLink) {
+                                resendVerificationLink.classList.add('hidden');
+                            }
+                            if (applicantActions) {
+                                applicantActions.classList.add('hidden');
+                            }
+                        } else { // admin
+                            registrationLink.classList.add('hidden');
+                            hrMessage.classList.add('hidden');
+                            if (resendVerificationLink) {
+                                resendVerificationLink.classList.add('hidden');
+                            }
+                            if (applicantActions) {
+                                applicantActions.classList.add('hidden');
+                            }
+                            // Hide forgot password for admin
+                            if (forgotPasswordLink) forgotPasswordLink.classList.add('hidden');
+                        }
+                        // For HR role, also hide forgot password link
+                        if (option.value === 'hr' && forgotPasswordLink) {
+                            forgotPasswordLink.classList.add('hidden');
+                        }
+                        // For applicant role, ensure forgot password is visible
+                        if (option.value === 'applicant' && forgotPasswordLink) {
+                            forgotPasswordLink.classList.remove('hidden');
+                        }
+                    }
+                });
+            }
+            
+            // Add event listeners to role radio buttons
+            roleOptions.forEach(option => {
+                option.addEventListener('change', updateRoleUI);
+            });
+            
+            // Initialize UI on page load
+            updateRoleUI();
+
+            // Automatic year update for footer
+            const currentYearElement = document.getElementById('currentYear');
+            if (currentYearElement) {
+                currentYearElement.textContent = new Date().getFullYear();
+            }
+
+            // Mobile menu handlers
+            function openMobileMenu() {
+                mobileMenu.classList.remove('hidden');
+                mobileMenuBtn.setAttribute('aria-expanded', 'true');
+                // prevent background scroll when menu open
+                document.body.classList.add('overflow-hidden');
+            }
+
+            function closeMobileMenu() {
+                mobileMenu.classList.add('hidden');
+                mobileMenuBtn.setAttribute('aria-expanded', 'false');
+                document.body.classList.remove('overflow-hidden');
+            }
+
+            if (mobileMenuBtn) {
+                mobileMenuBtn.addEventListener('click', openMobileMenu);
+            }
+            if (mobileMenuOverlay) {
+                mobileMenuOverlay.addEventListener('click', closeMobileMenu);
+            }
+            if (mobileMenuClose) {
+                mobileMenuClose.addEventListener('click', closeMobileMenu);
+            }
+            // Close on Escape
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !mobileMenu.classList.contains('hidden')) {
+                    closeMobileMenu();
+                }
+            });
+            // Password visibility toggles
+            document.querySelectorAll('.toggle-password').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.dataset.target;
+                    const input = document.getElementById(targetId);
+                    if (!input) return;
+                    const icon = btn.querySelector('i');
+                    if (input.type === 'password') {
+                        input.type = 'text';
+                        if (icon) {
+                            icon.classList.remove('fa-eye');
+                            icon.classList.add('fa-eye-slash');
+                        }
+                    } else {
+                        input.type = 'password';
+                        if (icon) {
+                            icon.classList.add('fa-eye');
+                            icon.classList.remove('fa-eye-slash');
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
