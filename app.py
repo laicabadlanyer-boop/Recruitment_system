@@ -1281,9 +1281,10 @@ def login_required(*roles):
             wants_json = (
                 request.is_json
                 or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-                or (request.method != 'GET' and request.accept_mimetypes.accept_json)
+                or (request.method != 'GET' and (request.accept_mimetypes.accept_json or 'application/json' in (request.headers.get('Accept') or '').lower()))
                 or (request.path or '').startswith('/api/')
                 or (request.accept_mimetypes.best == 'application/json')
+                or ('application/json' in (request.headers.get('Accept') or '').lower())
             )
             if not is_logged_in():
                 if wants_json:
@@ -8424,23 +8425,23 @@ def archive_applicant(application_id):
                 except Exception:
                     role_inner = None
                 role_inner = (role_inner or '').lower()
-                # Prefer user's role: only send to admin archived page if user is actually admin
-                if role_inner == 'admin':
+                # Prefer admin archived page if user role is admin or referrer came from admin UI
+                if role_inner == 'admin' or ('/admin/' in (ref_inner or '')):
                     redirect_target = url_for('admin_archived_applicants', _external=False)
                 else:
                     redirect_target = url_for('archived_applicants', _external=False)
-                # Log decision details for debugging
                 try:
                     print(f"➡️ Archive redirect decision: role_inner={role_inner}, ref_inner={ref_inner}, posted_redirect={posted_redirect}, redirect_target={redirect_target}")
                 except Exception:
                     pass
-                # Allow client to override redirect by posting a 'redirect' form value (safer for AJAX and non-AJAX clients)
-                # sanitize: only allow site-internal paths
                 if posted_redirect and (posted_redirect.startswith('/') or posted_redirect.startswith(url_for('archived_applicants')) or posted_redirect.startswith(url_for('admin_archived_applicants'))):
                     redirect_target = posted_redirect
-
-                # If this is an AJAX/json request, return JSON containing redirect URL
-                if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.accept_json:
+                if (
+                    request.is_json
+                    or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+                    or request.accept_mimetypes.accept_json
+                    or ('application/json' in (request.headers.get('Accept') or '').lower())
+                ):
                     return jsonify({'success': True, 'message': 'Application archived successfully.', 'redirect': redirect_target})
             else:
                 db.rollback()
