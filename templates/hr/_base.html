@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="J&T Express HR Management System - Manage recruitment, applications, and interviews">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{% block title %}HR • J&T Express{% endblock %}</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpeg') }}" type="image/jpeg">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo.jpeg') }}" type="image/jpeg">
+    <!-- Tailwind CSS CDN - Development only. For production, use PostCSS plugin or CLI -->
+    <!-- Suppress console warning in development -->
+    <script>
+        (function() {
+            // Suppress Tailwind CDN warning before it loads
+            if (typeof console !== 'undefined') {
+                const originalWarn = console.warn || function() {};
+                const originalError = console.error || function() {};
+                
+                console.warn = function(...args) {
+                    const message = args[0];
+                    if (typeof message === 'string' && (
+                        message.includes('cdn.tailwindcss.com') ||
+                        message.includes('should not be used in production') ||
+                        message.includes('Tailwind CSS')
+                    )) {
+                        return; // Suppress Tailwind CDN warning
+                    }
+                    originalWarn.apply(console, args);
+                };
+                
+                console.error = function(...args) {
+                    const message = args[0];
+                    if (typeof message === 'string' && (
+                        message.includes('cdn.tailwindcss.com') ||
+                        message.includes('should not be used in production') ||
+                        message.includes('Tailwind CSS')
+                    )) {
+                        return; // Suppress Tailwind CDN error
+                    }
+                    originalError.apply(console, args);
+                };
+            }
+        })();
+    </script>
+    <script>
+    // Click-level fallback: handle archive buttons directly (in case submit isn't fired)
+    document.addEventListener('click', function(e){
+        try{
+            var btn = e.target.closest && e.target.closest('button[title="Archive Applicant"], button[title="Archive application"], button[data-auto-archive], button[data-auto-archive="true"]');
+            if (!btn) return;
+            var form = btn.closest('form');
+            if (!form || !form.action) return;
+            if (form.action.indexOf('/archive') === -1) return;
+            e.preventDefault();
+            // Reuse the same logic as the submit interceptor
+            var submitBtn = btn;
+            var origHtml = submitBtn && submitBtn.innerHTML;
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+            fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function(resp){ var ct = resp.headers.get('content-type')||''; if (resp.ok && ct.indexOf('application/json')!==-1) return resp.json(); if (resp.redirected) { var finalUrl = resp.url || ''; if (finalUrl.indexOf('archived-applicants') !== -1) { window.location.href = finalUrl; return null; } window.showFlashMessage('Session expired or not authorized. Please reload and login.', 'error'); return null; } return resp.text().then(function(){ return { success: true }; }); })
+            .then(function(data){ if (!data) return; var redirectTarget = (data && data.redirect) || (form.dataset && form.dataset.redirect); if (redirectTarget) { window.location.href = redirectTarget; return; } if (data.success) { var row = form.closest('tr.applicant-row'); if (row) row.remove(); window.showFlashMessage(data.message||'Application archived.','success'); } else { window.showFlashMessage((data && data.error) || 'Failed to archive.', 'error'); } })
+            .catch(function(err){ console.error('Archive click handler error', err); window.showFlashMessage('Failed to archive application.', 'error'); })
+            .finally(function(){ if (submitBtn) { submitBtn.disabled = false; if (origHtml) submitBtn.innerHTML = origHtml; } });
+        }catch(e){ console.error('Archive click fallback', e); }
+    }, { capture: false });
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+    // Global fallback: ensure delete buttons remain clickable when overlays exist
+    (function(){
+        function lift(el){
+            try{
+                el.style.zIndex = '999999';
+                if (!el.style.position) el.style.position = 'relative';
+                el.style.pointerEvents = 'auto';
+            }catch(e){}
+        }
+
+        function isDeleteCandidate(el){
+            if(!el) return false;
+            try{
+                if (el.classList && el.classList.contains('ensure-top')) return true;
+                if (el.matches && (el.matches('.delete-notification-form button[type="submit"]') || el.matches('button[data-confirm], button[title="Delete"], button.btn-delete, .btn-delete'))) return true;
+                if (el.closest && (el.closest('.delete-notification-form') || el.closest('[data-confirm]') || el.closest('form[action*="delete"]'))) return true;
+            }catch(e){}
+            return false;
+        }
+
+        document.addEventListener('DOMContentLoaded', function(){
+            try{
+                Array.from(document.querySelectorAll('.ensure-top, button[data-confirm], button[title="Delete"], button.btn-delete, .delete-notification-form button[type="submit"]')).forEach(lift);
+            }catch(e){}
+        });
+
+        // Capture-phase pointer handler: detect underlying delete buttons and activate them
+        window.addEventListener('pointerdown', function(ev){
+            try{
+                var x = ev.clientX, y = ev.clientY;
+                if (typeof x !== 'number' || typeof y !== 'number') return;
+                var els = document.elementsFromPoint(x,y) || [];
+                for(var i=0;i<els.length;i++){
+                    var el = els[i];
+                    if (!el) continue;
+                    if (isDeleteCandidate(el)){
+                        // find closest actionable element (form submit button or button)
+                        var btn = el.closest && el.closest('button[type="submit"], button') || (el.tagName && el.tagName.toLowerCase() === 'button' ? el : null);
+                        if (!btn && el.matches && el.matches('button')) btn = el;
+                        if (btn){
+                            try{ ev.preventDefault(); ev.stopPropagation(); }catch(_){}
+                            // Use click to trigger any attached handlers; if form needs confirm, rely on existing helpers
+                            btn.click();
+                            return;
+                        }
+                    }
+                }
+            }catch(e){}
+        }, { capture: true, passive: false });
+    })();
+    </script>
+    <style>
+        * { 
+            font-family: 'Inter', sans-serif; 
+            box-sizing: border-box;
+        }
+        body { 
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Main Layout Container */
+        .main-layout-container {
+            display: flex;
+            flex: 1;
+            min-height: calc(100vh - 73px);
+            position: relative;
+            width: 100%;
+            flex-wrap: nowrap;
+            align-items: stretch;
+        }
+
+        /* Sidebar width adjustments for desktop */
+        @media (min-width: 1024px) {
+            #sidebar {
+                flex-shrink: 0;
+            }
+        }
+        @media (min-width: 1280px) {
+            #sidebar {
+                width: 18rem; /* 288px - w-72 */
+            }
+        }
+
+        /* Main content flex adjustments */
+        main {
+            flex: 1;
+            min-width: 0;
+        }
+        /* Sidebar width is handled by Tailwind classes: ml-64 lg:ml-64 xl:ml-72 */
+        /* No need to override margin-left in CSS as Tailwind handles it */
+
+        /* Card Styling - Enhanced */
+        .card { 
+            border: 1px solid rgba(255,255,255,0.06); 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.02);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(17, 24, 39, 0.85);
+        }
+        .card:hover {
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(220,38,38,0.15);
+            transform: translateY(-2px);
+            border-color: rgba(220,38,38,0.2);
+        }
+        .card-interactive {
+            cursor: pointer;
+        }
+        .card-interactive:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(220,38,38,0.2), 0 0 0 1px rgba(220,38,38,0.25);
+        }
+
+        /* Accent helpers for consistent palette */
+        .badge-accent {
+            background: rgba(220, 38, 38, 0.15);
+            color: rgba(248, 200, 200, 0.95);
+            border: 1px solid rgba(220, 38, 38, 0.35);
+        }
+        .badge-muted {
+            background: rgba(24, 24, 24, 0.85);
+            color: rgba(229, 231, 235, 0.88);
+            border: 1px solid rgba(75, 85, 99, 0.6);
+        }
+        .chip-accent {
+            background: rgba(220, 38, 38, 0.12);
+            color: rgba(248, 200, 200, 0.9);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+        }
+        .chip-muted {
+            background: rgba(31, 31, 31, 0.7);
+            color: rgba(209, 213, 219, 0.85);
+            border: 1px solid rgba(75, 85, 99, 0.6);
+        }
+        .btn-accent {
+            background: rgba(220, 38, 38, 0.85);
+            color: #ffffff;
+            border: 1px solid rgba(220, 38, 38, 0.45);
+            transition: all 0.2s ease;
+        }
+        .btn-accent:hover {
+            background: rgba(220, 38, 38, 0.95);
+            border-color: rgba(220, 38, 38, 0.6);
+        }
+
+        /* Pruned legacy color override utilities to avoid heavy global overrides */
+
+        /* Table row hover */
+        table tbody tr { transition: all 0.2s ease; }
+        table tbody tr:hover { background: rgba(220,38,38,0.05); }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(31,41,55,0.5); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(220,38,38,0.5); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(220,38,38,0.7); }
+        table tbody td { word-break: break-word; }
+        img, video, canvas, svg { max-width: 100%; height: auto; }
+        /* Ensure hidden modal overlays do not intercept pointer events */
+        .modal-overlay.hidden { display: none !important; pointer-events: none !important; visibility: hidden !important; }
+        .modal-overlay { pointer-events: none; }
+        .modal-overlay:not(.hidden) { pointer-events: auto; }
+    </style>
+    <script>
+    // Global helper used by many pages to show confirm modal or native confirm
+    window.confirmAndSubmitForm = function(form, msg) {
+        try {
+            if (!form) return;
+            if (typeof openConfirmWithCallback === 'function') {
+                // Use modal-driven confirm when available
+                openConfirmWithCallback(function() { form.submit(); }, msg || 'Are you sure?');
+                return;
+            }
+        } catch (e) {
+            console.error('confirmAndSubmitForm error', e);
+        }
+        // Fallback to native confirm
+        try {
+            if (confirm(msg || 'Are you sure?')) form.submit();
+        } catch (e) { console.error(e); }
+    };
+    // Global flash message helper (available to all pages)
+    if (typeof window.showFlashMessage !== 'function') {
+        window.showFlashMessage = function(message, type) {
+            try {
+                var flashContainer = document.createElement('div');
+                flashContainer.className = 'global-flash fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2';
+                flashContainer.style.transition = 'opacity 0.3s ease';
+                flashContainer.style.opacity = '1';
+                flashContainer.style.pointerEvents = 'auto';
+                flashContainer.style.display = 'flex';
+                if (type === 'success') {
+                    flashContainer.style.background = '#16a34a';
+                    flashContainer.style.color = '#fff';
+                } else {
+                    flashContainer.style.background = '#dc2626';
+                    flashContainer.style.color = '#fff';
+                }
+                flashContainer.innerHTML = '<span style="font-weight:600;margin-right:.5rem">' + (type === 'success' ? '✔' : '⚠') + '</span><span>' + (message || '') + '</span>';
+                document.body.appendChild(flashContainer);
+                setTimeout(function() {
+                    flashContainer.style.opacity = '0';
+                    setTimeout(function(){ try{ flashContainer.remove(); }catch(e){} }, 300);
+                }, 3000);
+            } catch (e) { console.error('showFlashMessage error', e); }
+        };
+    }
+    </script>
+    <script>
+    // Global handler: intercept submits for archive forms and follow JSON redirects
+    document.addEventListener('submit', function(e){
+        try{
+            var form = e.target;
+            if (!form || !form.action) return;
+            if (form.action.indexOf('/archive') === -1) return;
+            // Intercept
+            e.preventDefault();
+            var submitBtn = form.querySelector('button[type=submit], input[type=submit]');
+            var origHtml = submitBtn && submitBtn.innerHTML;
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+            // include explicit redirect preference so server can honor client-side navigation intent
+            var fd = new FormData(form);
+            try{ if (form.dataset && form.dataset.redirect) fd.append('redirect', form.dataset.redirect); }catch(e){}
+            fetch(form.action, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                credentials: 'same-origin'
+            }).then(function(resp){
+                // Handle auth/authorization responses explicitly
+                if (resp.status === 401) { window.showFlashMessage('Session expired. Please login.', 'error'); return null; }
+                if (resp.status === 403) { window.showFlashMessage('Not authorized to perform this action.', 'error'); return null; }
+                var ct = resp.headers.get('content-type') || '';
+                if (ct.indexOf('application/json') !== -1) return resp.json();
+                if (resp.redirected) {
+                    var finalUrl = resp.url || '';
+                    if (finalUrl.indexOf('archived-applicants') !== -1) {
+                        window.location.href = finalUrl; return null;
+                    }
+                    window.showFlashMessage('Session expired or not authorized. Please reload and login.', 'error');
+                    return null;
+                }
+                return resp.text().then(function(text){
+                    try{
+                        var m = (text || '').match(/href="([^\"]+)"/);
+                        if (m) { window.location.href = m[1]; return null; }
+                    }catch(_){ }
+                    return { success: true };
+                });
+            }).then(function(data){
+                if (!data) return;
+                // Prefer the form-provided redirect target (explicit) to ensure consistent UX
+                var redirectTarget = (form.dataset && form.dataset.redirect) || (data && data.redirect) || '/hr/archived-applicants';
+                if (redirectTarget) { window.location.href = redirectTarget; return; }
+                if (data && data.success) {
+                    var row = form.closest('tr.applicant-row'); if (row) row.remove();
+                    window.showFlashMessage(data.message || 'Application archived.', 'success');
+                } else {
+                    window.showFlashMessage((data && data.error) || 'Failed to archive application.', 'error');
+                }
+            }).catch(function(err){ console.error('Archive submit handler error', err); window.showFlashMessage('Failed to archive application.', 'error'); })
+            .finally(function(){ if (submitBtn) { submitBtn.disabled = false; if (origHtml) submitBtn.innerHTML = origHtml; } });
+        }catch(e){ console.error('Archive submit interception', e); }
+    }, { capture: false });
+    // Robust helper: programmatically submit/archive via AJAX from button or form
+    window.archiveFormSubmit = function(triggerEl){
+        try{
+            var btn = triggerEl && (triggerEl.tagName && triggerEl.tagName.toLowerCase() === 'form' ? (triggerEl.querySelector('button[type=submit]')||triggerEl) : triggerEl);
+            var form = btn && btn.closest && btn.closest('form');
+            if (!form) return;
+            var redirectTarget = (form.dataset && form.dataset.redirect) || '/hr/archived-applicants';
+            var origHtml = btn && btn.innerHTML;
+            if (btn) { btn.disabled = true; try{ btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }catch(e){} }
+            var fd2 = new FormData(form);
+            try{ if (form.dataset && form.dataset.redirect) fd2.append('redirect', form.dataset.redirect); }catch(e){}
+            fetch(form.action, { method: 'POST', body: fd2, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function(resp){
+                if (resp.status === 401) { window.showFlashMessage('Session expired. Please login.', 'error'); return null; }
+                if (resp.status === 403) { window.showFlashMessage('Not authorized to perform this action.', 'error'); return null; }
+                var ct = resp.headers.get('content-type')||'';
+                if (ct.indexOf('application/json')!==-1) return resp.json();
+                if (resp.redirected) { window.location.href = resp.url; return null; }
+                return resp.text().then(function(){ return { success: true }; });
+            }).then(function(data){
+                if (!data) return;
+                var final = (form.dataset && form.dataset.redirect) || (data && data.redirect) || redirectTarget;
+                if (final) { window.location.href = final; return; }
+                if (data && data.success) { var row = form.closest('tr.applicant-row'); if (row) row.remove(); window.showFlashMessage(data.message || 'Application archived.', 'success'); }
+                else { window.showFlashMessage((data && data.error) || 'Failed to archive application.', 'error'); }
+            }).catch(function(err){ console.error('archiveFormSubmit error', err); window.showFlashMessage('Failed to archive application.', 'error'); })
+            .finally(function(){ if (btn) { btn.disabled = false; try{ if (origHtml) btn.innerHTML = origHtml; }catch(e){} } });
+        }catch(e){ console.error('archiveFormSubmit top error', e); }
+    };
+    </script>
+    {% block extra_css %}{% endblock %}
+    {% set dd = dashboard_data or {} %}
+    {% set branch_info = branch_info if branch_info is defined else (dd.branch_info if dd and dd.branch_info else (dd.branch or dd.current_branch if dd else None)) %}
+    {% set notif_raw = hr_notif_count if hr_notif_count is defined else (dd.get('notifications_count') if dd is mapping else (dd.notifications_count if dd else None)) %}
+    {% set notif_count = notif_raw if notif_raw is not none else ((hr_notifications|length) if hr_notifications is defined else ((dd.get('notifications')|length) if dd and (dd.get('notifications') is not none) else 0)) %}
+    {% set notif_list = hr_notifications if hr_notifications is defined else (dd.get('notifications', []) if dd is mapping else (dd.notifications if dd else [])) %}
+    {% set user_display = current_user.name if current_user and current_user.name else 'HR User' %}
+    {% set email_display = current_user.email if current_user and current_user.email else '' %}
+    {% set notif_display = '99+' if notif_count > 99 else notif_count %}
+</head>
+<body class="text-white min-h-screen">
+    <!-- Sidebar Overlay for Mobile -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <!-- Top Navigation (style-aligned with Admin) -->
+    <nav class="bg-black/95 backdrop-blur-md border-b-2 border-red-600/50 shadow-2xl shadow-red-600/20 sticky top-0 z-50">
+        <div class="max-w-full mx-auto px-3 sm:px-4 md:px-5 lg:px-6 xl:px-8 2xl:px-10">
+            <div class="flex items-center justify-between py-2.5 sm:py-3 md:py-3.5 lg:py-4">
+                <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    <button id="mobile-menu-btn" class="lg:hidden bg-gray-800/50 p-2 rounded-lg hover:bg-gray-700/50 transition-all mr-2">
+                        <i class="fas fa-bars text-base sm:text-lg"></i>
+                    </button>
+                    <a href="{{ url_for('hr_dashboard') }}" class="flex items-center gap-2 sm:gap-3 group flex-shrink-0">
+                        <div class="relative">
+                            <img src="{{ url_for('static', filename='images/logo.jpeg') }}" alt="WHITEHAT 88" class="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full object-cover ring-2 ring-red-600/30 group-hover:ring-red-600/60 transition-all">
+                        </div>
+                        <div class="hidden sm:block">
+                            <p class="text-base sm:text-lg md:text-xl font-bold tracking-wide whitespace-nowrap">J&T Express</p>
+                            <p class="text-xs text-gray-400 -mt-1 uppercase tracking-wider hidden md:block">HR Portal</p>
+                        </div>
+                    </a>
+                </div>
+                <!-- Right controls -->
+                <div class="hidden lg:flex items-center gap-4 flex-shrink-0">
+                    <!-- Notifications Dropdown -->
+                    <div class="relative">
+                        <button id="hr-notif-btn" class="relative p-2.5 rounded-lg hover:bg-gray-800/50 transition-all group">
+                            <i class="fas fa-bell text-gray-300 text-lg group-hover:text-red-400 transition-colors"></i>
+                            {% if notif_count > 0 %}
+                            <span class="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center font-semibold shadow-lg">{{ notif_display }}</span>
+                            {% endif %}
+                        </button>
+                        <div id="hr-notif-dd" class="absolute right-0 mt-2 w-80 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-800 hidden z-50 overflow-hidden">
+                            <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                                <h3 class="text-sm font-semibold text-white">Notifications</h3>
+                                <a href="{{ url_for('hr_notifications') }}" class="text-xs text-red-400 hover:text-red-200 font-semibold flex items-center gap-1">
+                                    View all <i class="fas fa-arrow-right text-[10px]"></i>
+                                </a>
+                            </div>
+                            <div class="max-h-96 overflow-y-auto">
+                                {% for n in notif_list %}
+                                <div class="p-4 border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                                    <p class="text-sm text-gray-200">{{ n.title or 'Update' }}</p>
+                                    <p class="text-xs text-gray-400">{{ n.message }}</p>
+                                    <span class="text-xs text-gray-500">{{ n.time or n.sent_at }}</span>
+                                </div>
+                                {% else %}
+                                <div class="p-4 text-center text-gray-400 text-sm">
+                                    <i class="fas fa-bell-slash text-2xl mb-2 text-gray-600"></i>
+                                    <p>No new notifications</p>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <!-- User Dropdown -->
+                    <div class="relative">
+                        <button id="hr-user-btn" class="flex items-center gap-2 sm:gap-3 p-2 rounded-lg hover:bg-gray-800/50 transition-all group">
+                            <div class="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-red-600 to-red-700 rounded-full flex items-center justify-center border-2 border-red-500/30 group-hover:border-red-500/60 transition-all shadow-lg">
+                                <i class="fas fa-user text-white text-xs sm:text-sm"></i>
+                            </div>
+                            <div class="text-left hidden xl:block">
+                                <p class="text-sm font-semibold whitespace-nowrap">{{ user_display }}</p>
+                                <p class="text-xs text-gray-400 truncate max-w-[150px]">{{ email_display }}</p>
+                            </div>
+                            <i class="fas fa-chevron-down text-gray-400 text-xs group-hover:text-white transition-colors hidden xl:block"></i>
+                        </button>
+                        <div id="hr-user-dd" class="absolute right-0 mt-2 w-56 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-800 hidden z-50 overflow-hidden">
+                            <a href="{{ url_for('hr_profile') }}" class="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-800/50 transition-colors border-b border-gray-800">
+                                <i class="fas fa-user-circle mr-2 text-red-400"></i>Profile
+                            </a>
+                            <a href="{{ url_for('hr_reports_analytics') }}" class="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-800/50 transition-colors">
+                                <i class="fas fa-chart-bar mr-2 text-red-400"></i>Reports
+                            </a>
+                            <div class="border-t border-gray-800"></div>
+                            <a href="{{ url_for('logout') }}" class="block px-4 py-3 text-sm text-red-400 hover:bg-red-600/20 transition-colors">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Mobile controls -->
+                <div class="lg:hidden flex items-center gap-2 relative">
+                    <button id="hr-notif-btn-m" class="relative p-2 rounded-lg hover:bg-gray-800/50 transition-all" aria-haspopup="true" aria-expanded="false" aria-label="Open notifications">
+                        <i class="fas fa-bell text-gray-300 text-base"></i>
+                        {% if notif_count > 0 %}
+                        <span class="notification-badge absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] rounded-full min-w-[1.1rem] h-4 px-1 flex items-center justify-center font-semibold">{{ notif_display }}</span>
+                        {% endif %}
+                    </button>
+                    <!-- Mobile Notifications Dropdown -->
+                    <div id="hr-notif-dd-m" class="absolute right-0 top-12 w-72 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-800 hidden z-50 overflow-hidden">
+                        <div class="p-3 border-b border-gray-800 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-white">Notifications</h3>
+                            <a href="{{ url_for('hr_notifications') }}" class="text-xs text-red-400 hover:text-red-200 font-semibold flex items-center gap-1">
+                                View all <i class="fas fa-arrow-right text-[10px]"></i>
+                            </a>
+                        </div>
+                        <div class="max-h-80 overflow-y-auto">
+                            {% for n in notif_list %}
+                            <div class="p-3 border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                                <p class="text-sm text-gray-200">{{ n.title or 'Update' }}</p>
+                                <p class="text-xs text-gray-400">{{ n.message }}</p>
+                                <span class="text-[11px] text-gray-500">{{ n.time or n.sent_at }}</span>
+                            </div>
+                            {% else %}
+                            <div class="p-6 text-center text-gray-400 text-sm">
+                                <i class="fas fa-bell-slash text-2xl mb-2 text-gray-600"></i>
+                                <p>No new notifications</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <button id="hr-user-btn-m" class="p-2 rounded-lg hover:bg-gray-800/50 transition-all" aria-haspopup="true" aria-expanded="false" aria-label="Open user menu">
+                        <i class="fas fa-user text-gray-300 text-base"></i>
+                    </button>
+                    <!-- Mobile User Dropdown -->
+                    <div id="hr-user-dd-m" class="absolute right-0 top-12 w-56 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-800 hidden z-50 overflow-hidden">
+                        <a href="{{ url_for('hr_profile') }}" class="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-800/50 transition-colors border-b border-gray-800">
+                            <i class="fas fa-user-circle mr-2 text-red-400"></i>Profile
+                        </a>
+                        <a href="{{ url_for('logout') }}" class="block px-4 py-3 text-sm text-red-400 hover:bg-red-600/20 transition-colors">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-layout-container">
+        {% include 'hr/_sidebar.html' %}
+        <!-- Main Content -->
+        <main class="flex-1 w-full min-w-0 ml-0 lg:ml-64 xl:ml-72 p-2 sm:p-3 md:p-4 lg:p-5 xl:p-6 space-y-2 sm:space-y-3 md:space-y-3 lg:space-y-4 animate-fade-in pb-3 sm:pb-4 md:pb-5 lg:pb-6 transition-all duration-300 overflow-x-hidden">
+            {# Flash messages removed per user request #}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+    <script>
+        // Shared DOM helpers and safe form normalization
+        (function initSharedHelpers(){
+            window.$id = function(id){ try { return document.getElementById(id); } catch(e) { return null; } };
+            window.onKeyToggle = function(el, menu, event){
+                if (!el || !menu) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    menu.classList.toggle('hidden');
+                    const expanded = el.getAttribute('aria-expanded') === 'true';
+                    el.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                }
+            };
+            document.addEventListener('DOMContentLoaded', function(){
+                try {
+                    // Add ids from names, pair labels, add aria-required where needed
+                    const usedIds = new Set(Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+                    const ensureUniqueId = (base) => {
+                        let cleaned = String(base || '').trim().replace(/\s+/g, '-').toLowerCase();
+                        if (!cleaned) cleaned = 'field';
+                        let candidate = cleaned;
+                        let i = 1;
+                        while (usedIds.has(candidate)) {
+                            candidate = `${cleaned}-${i++}`;
+                        }
+                        usedIds.add(candidate);
+                        return candidate;
+                    };
+                    document.querySelectorAll('form').forEach(form => {
+                        form.querySelectorAll('input, select, textarea').forEach((field, idx) => {
+                            const lname = (field.name || field.id || '').toLowerCase();
+                            if (!field.id) {
+                                const base = field.name || (field.tagName.toLowerCase() + '-' + (field.type || 'field') + '-' + idx);
+                                field.id = ensureUniqueId(base);
+                            }
+                            if (field.required && !field.hasAttribute('aria-required')) {
+                                field.setAttribute('aria-required', 'true');
+                            }
+                            // Autocomplete hints based on common names
+                            if (!field.hasAttribute('autocomplete')) {
+                                if (lname.includes('email')) field.setAttribute('autocomplete', 'email');
+                                else if (lname.includes('phone') || lname.includes('contact')) field.setAttribute('autocomplete', 'tel');
+                                else if (lname.includes('name') && !lname.includes('company')) field.setAttribute('autocomplete', 'name');
+                                else if (lname.includes('company') || lname.includes('branch')) field.setAttribute('autocomplete', 'organization');
+                                else if (lname.includes('address')) field.setAttribute('autocomplete', 'street-address');
+                                else if (lname.includes('city')) field.setAttribute('autocomplete', 'address-level2');
+                                else if (lname.includes('state') || lname.includes('province')) field.setAttribute('autocomplete', 'address-level1');
+                                else if (lname.includes('zip') || lname.includes('postal')) field.setAttribute('autocomplete', 'postal-code');
+                                else if (lname.includes('date')) field.setAttribute('autocomplete', 'off');
+                                else if (lname.includes('time')) field.setAttribute('autocomplete', 'off');
+                                else if (lname.includes('location')) field.setAttribute('autocomplete', 'off');
+                            }
+                        });
+                        form.querySelectorAll('label:not([for])').forEach(label => {
+                            const control = label.querySelector('input, select, textarea');
+                            if (control && control.id) {
+                                label.setAttribute('for', control.id);
+                            }
+                        });
+                    });
+                } catch(e) {}
+            });
+        })();
+
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const mobileBtn = document.getElementById('mobile-menu-btn');
+        const closeBtn = document.getElementById('close-sidebar');
+
+        // Mobile sidebar toggle with overlay
+        function openSidebar() {
+            if (sidebar && sidebarOverlay) {
+                sidebar.classList.remove('-translate-x-full');
+                sidebar.classList.add('translate-x-0');
+                sidebarOverlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+        function closeSidebar() {
+            if (sidebar && sidebarOverlay) {
+                sidebar.classList.add('-translate-x-full');
+                sidebar.classList.remove('translate-x-0');
+                sidebarOverlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+        if (mobileBtn) mobileBtn.addEventListener('click', openSidebar);
+        if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
+        if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
+
+        // Dropdowns (HR)
+        const notifBtn = document.getElementById('hr-notif-btn');
+        const notifDd = document.getElementById('hr-notif-dd');
+        const notifBtnM = document.getElementById('hr-notif-btn-m');
+        const notifDdM = document.getElementById('hr-notif-dd-m');
+        const userBtnM = document.getElementById('hr-user-btn-m');
+        const userDdM = document.getElementById('hr-user-dd-m');
+        const userBtn = document.getElementById('hr-user-btn');
+        const userDd = document.getElementById('hr-user-dd');
+
+        if (notifBtn && notifDd) {
+            notifBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                notifDd.classList.toggle('hidden');
+                if (userDd) userDd.classList.add('hidden');
+                const expanded = notifBtn.getAttribute('aria-expanded') === 'true';
+                notifBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            });
+            // Keyboard accessibility
+            notifBtn.setAttribute('aria-haspopup', 'true');
+            notifBtn.setAttribute('aria-expanded', 'false');
+            notifBtn.addEventListener('keydown', (e) => {
+                onKeyToggle(notifBtn, notifDd, e);
+            });
+        }
+        if (notifBtnM && notifDdM) {
+            notifBtnM.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const expanded = notifBtnM.getAttribute('aria-expanded') === 'true';
+                notifDdM.classList.toggle('hidden');
+                notifBtnM.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                if (userDd) userDd.classList.add('hidden');
+                if (userDdM) userDdM.classList.add('hidden');
+            });
+        }
+        if (userBtnM && userDdM) {
+            userBtnM.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const expanded = userBtnM.getAttribute('aria-expanded') === 'true';
+                userDdM.classList.toggle('hidden');
+                userBtnM.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                if (notifDdM) notifDdM.classList.add('hidden');
+            });
+        }
+        if (userBtn && userDd) {
+            userBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                userDd.classList.toggle('hidden');
+                if (notifDd) notifDd.classList.add('hidden');
+            });
+        }
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (userDd && !userDd.contains(e.target) && userBtn && !userBtn.contains(e.target)) {
+                userDd.classList.add('hidden');
+            }
+            if (notifDd && !notifDd.contains(e.target) && notifBtn && !notifBtn.contains(e.target)) {
+                notifDd.classList.add('hidden');
+            }
+            if (notifDdM && !notifDdM.contains(e.target) && notifBtnM && !notifBtnM.contains(e.target)) {
+                notifDdM.classList.add('hidden');
+                notifBtnM.setAttribute('aria-expanded', 'false');
+            }
+            if (userDdM && !userDdM.contains(e.target) && userBtnM && !userBtnM.contains(e.target)) {
+                userDdM.classList.add('hidden');
+                userBtnM.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // Close sidebar on window resize if desktop (debounced for performance)
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+            if (window.innerWidth >= 1024) {
+                closeSidebar();
+            }
+            }, 150);
+        });
+
+        // Mark active sidebar item by current path
+        document.addEventListener('DOMContentLoaded', () => {
+            const currentPath = window.location.pathname;
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                const href = item.getAttribute('href');
+                if (href && (currentPath === href || currentPath.startsWith(href + '/'))) {
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // Connect notifications between Admin and HR via BroadcastChannel + localStorage
+        (function initHrNotificationBridge(){
+            const STORAGE_KEY = 'wh88_notifications';
+            const CHANNEL_NAME = 'wh88_notifications';
+            let bc;
+            try { bc = new BroadcastChannel(CHANNEL_NAME); } catch(e) { bc = null; }
+
+            function readStore() {
+                try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { return []; }
+            }
+            function renderIntoHrUIs(note) {
+                const timeText = note.time || '';
+                const dd = document.getElementById('hr-notif-dd');
+                const ddM = document.getElementById('hr-notif-dd-m');
+                const btn = document.getElementById('hr-notif-btn');
+                const btnM = document.getElementById('hr-notif-btn-m');
+                const desktopItem = `
+                    <div class="p-4 border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                        <p class="text-sm text-gray-200">${note.title || 'Update'}</p>
+                        <p class="text-xs text-gray-400">${note.message || ''}</p>
+                        <span class="text-xs text-gray-500">${timeText}</span>
+                    </div>
+                `;
+                const mobileItem = `
+                    <div class="p-3 border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                        <p class="text-sm text-gray-200">${note.title || 'Update'}</p>
+                        <p class="text-xs text-gray-400">${note.message || ''}</p>
+                        <span class="text-[11px] text-gray-500">${timeText}</span>
+                    </div>
+                `;
+                if (dd) {
+                    const list = dd.querySelector('.max-h-96');
+                    if (list) {
+                        const empty = list.querySelector('.text-center');
+                        if (empty) empty.remove();
+                        list.insertAdjacentHTML('afterbegin', desktopItem);
+                    }
+                }
+                if (ddM) {
+                    const listM = ddM.querySelector('.max-h-80');
+                    if (listM) {
+                        const emptyM = listM.querySelector('.text-center');
+                        if (emptyM) emptyM.remove();
+                        listM.insertAdjacentHTML('afterbegin', mobileItem);
+                    }
+                }
+                function updateBadge(btnEl, isMobile) {
+                    if (!btnEl) return;
+                    let badge = btnEl.querySelector('.notification-badge');
+                    const current = badge ? (badge.textContent.trim() === '99+' ? 99 : parseInt(badge.textContent.trim(), 10) || 0) : 0;
+                    const next = Math.min(current + 1, 99);
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = isMobile
+                          ? 'notification-badge absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] rounded-full min-w-[1.1rem] h-4 px-1 flex items-center justify-center font-semibold'
+                          : 'notification-badge absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center font-semibold shadow-lg';
+                        btnEl.appendChild(badge);
+                    }
+                    badge.textContent = next === 99 ? '99+' : String(next);
+                }
+                updateBadge(btn, false);
+                updateBadge(btnM, true);
+            }
+            function onIncoming(note) { renderIntoHrUIs(note); }
+            if (bc) bc.onmessage = (e) => { if (e && e.data) onIncoming(e.data); };
+            window.addEventListener('storage', (e) => {
+                if (e.key === STORAGE_KEY + '_ping') {
+                    const list = readStore();
+                    if (list && list.length > 0) onIncoming(list[0]);
+                }
+            });
+        })();
+    </script>
+    <!-- Global Confirmation Modal -->
+    <div id="global-confirm-modal" class="modal-overlay hidden">
+        <div class="modal-content max-w-lg">
+            <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-900/95 z-10">
+                <h3 class="text-lg sm:text-xl font-bold">Please Confirm</h3>
+                <button onclick="confirmModalCancel()" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            <div class="p-4 sm:p-6">
+                <p id="global-confirm-message" class="text-sm text-gray-300 mb-4">Are you sure?</p>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="confirmModalCancel()" class="px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all text-sm font-medium">Cancel</button>
+                    <button type="button" id="global-confirm-btn" onclick="confirmModalSubmit()" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    window._confirmFormToSubmit = null;
+    window._confirmCallback = null;
+    window.openConfirmOnFormSubmit = function(form, msg) {
+        window._confirmFormToSubmit = form;
+        window._confirmCallback = null;
+        var el = document.getElementById('global-confirm-message');
+        if (el) el.textContent = msg || 'Are you sure?';
+        var modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+        return false;
+    };
+    window.openConfirmWithCallback = function(cb, msg) {
+        window._confirmCallback = cb;
+        window._confirmFormToSubmit = null;
+        var el = document.getElementById('global-confirm-message');
+        if (el) el.textContent = msg || 'Are you sure?';
+        var modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window._confirmModifiedButton = null;
+    window.confirmModalSubmit = function() {
+        try {
+            if (window._confirmCallback && typeof window._confirmCallback === 'function') {
+                window._confirmCallback();
+                window._confirmCallback = null;
+            } else if (window._confirmFormToSubmit) {
+                var f = window._confirmFormToSubmit;
+                window._confirmFormToSubmit = null;
+                try {
+                    if (!f.hasAttribute('data-no-loading')) {
+                        var btn = f.querySelector('button[type=submit], input[type=submit]');
+                        if (btn) {
+                            btn.disabled = true;
+                            if (btn.tagName.toLowerCase() === 'button') btn.dataset.origHtml = btn.innerHTML;
+                            btn.innerHTML = '<span class="spinner-border" style="width:1rem;height:1rem;display:inline-block;vertical-align:middle;margin-right:.5rem;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin 0.75s linear infinite"></span>Loading...';
+                            btn.dataset.wasLoadingApplied = '1';
+                            window._confirmModifiedButton = btn;
+                        }
+                    }
+                } catch(e) { console.error(e); }
+                setTimeout(function() { f.submit(); }, 80);
+            }
+        } catch (e) {
+            console.error('Confirm modal submit error:', e);
+        }
+        confirmModalCancel();
+    };
+    window.confirmModalCancel = function() {
+        try {
+            if (window._confirmModifiedButton) {
+                try {
+                    var b = window._confirmModifiedButton;
+                    if (b.dataset.origHtml) b.innerHTML = b.dataset.origHtml;
+                    b.disabled = false;
+                    delete b.dataset.origHtml;
+                    delete b.dataset.wasLoadingApplied;
+                } catch(e) { console.error('Restore button error', e); }
+                window._confirmModifiedButton = null;
+            }
+        } catch(e) { console.error(e); }
+        window._confirmFormToSubmit = null;
+        window._confirmCallback = null;
+        var modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.add('hidden');
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+    };
+    // Centralized delegated handler for confirm-submit buttons
+    (function(){
+        function findForm(el){
+            if(!el) return null;
+            if(el.closest) return el.closest('form');
+            var p = el.parentNode; while(p){ if(p.tagName && p.tagName.toLowerCase()==='form') return p; p = p.parentNode; } return null;
+        }
+
+        document.addEventListener('click', function(e){
+            try{
+                var target = e.target || e.srcElement;
+                if(!target) return;
+                var btn = target.closest ? target.closest('button[data-action="confirm-submit"], button[data-confirm]') : (function(){ var el = target; while(el){ try{ if(el.tagName && el.tagName.toLowerCase()==='button' && (el.getAttribute('data-action')==='confirm-submit' || el.getAttribute('data-confirm'))) return el; }catch(e){} el = el.parentNode; } return null; })();
+                if(!btn) return;
+                // Only handle left-clicks / primary button
+                if(e.button && e.button !== 0) return;
+                e.preventDefault(); e.stopPropagation();
+
+                var form = findForm(btn);
+                var msg = btn.getAttribute('data-confirm') || btn.dataset && btn.dataset.confirm || 'Are you sure?';
+
+                if(typeof openConfirmWithCallback === 'function'){
+                    openConfirmWithCallback(function(){ if(form) form.submit(); }, msg);
+                } else {
+                    confirmAndSubmitForm(form, msg);
+                }
+            }catch(err){ console.error('confirm-submit handler error', err); }
+        }, true);
+    })();
+        // Fallback: if a form is submitted (e.g., click intercepted), ensure confirmation runs
+        document.addEventListener('submit', function(e){
+            try{
+                var form = e.target;
+                if(!form || !form.tagName || form.tagName.toLowerCase() !== 'form') return;
+                // If the form itself requests confirmation
+                var formMsg = form.getAttribute && form.getAttribute('data-confirm');
+                if(formMsg){
+                    e.preventDefault(); e.stopPropagation();
+                    return openConfirmOnFormSubmit(form, formMsg);
+                }
+                // Otherwise look for a submit button inside the form that requested confirmation
+                var btn = form.querySelector && (form.querySelector('button[data-action="confirm-submit"], button[data-confirm], input[data-confirm]'));
+                if(btn){
+                    e.preventDefault(); e.stopPropagation();
+                    var msg = btn.getAttribute('data-confirm') || (btn.dataset && btn.dataset.confirm) || 'Are you sure?';
+                    return openConfirmOnFormSubmit(form, msg);
+                }
+            }catch(err){ console.error('form submit confirm fallback error', err); }
+        }, true);
+    </script>
+    <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</body>
+</html>
