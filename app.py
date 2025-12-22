@@ -19833,14 +19833,22 @@ def vite_client_placeholder():
 
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
-    """Handle CSRF token errors."""
+    """Handle CSRF token errors with proper JSON for AJAX and 302 for normal requests."""
     log.exception(f'❌ CSRF Error: {e}')
     flash('Security error: Your session has expired. Please refresh the page and try again.', 'error')
-    # If it's a login route, return login page
-    if request.endpoint == 'login' or '/login' in request.path:
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.accept_mimetypes.accept_json
+        or request.is_json
+    )
+    if request.endpoint == 'login' or '/login' in (request.path or ''):
+        if wants_json:
+            return jsonify({'success': False, 'error': 'CSRF failed', 'detail': 'Session expired'}), 401
         return render_template('login.html'), 400
+    if wants_json:
+        return jsonify({'success': False, 'error': 'CSRF failed', 'detail': 'Session expired'}), 401
     referrer = request.referrer or url_for('index', _external=True)
-    return immediate_redirect(referrer), 400
+    return immediate_redirect(referrer)
 
 
 # Security headers
