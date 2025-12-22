@@ -1290,7 +1290,7 @@ def login_required(*roles):
                 if wants_json:
                     return jsonify({'success': False, 'error': 'Authentication required'}), 401
                 flash('Please login to access this page.', 'error')
-                return immediate_redirect(url_for('login', _external=True))
+                return immediate_redirect(url_for('login', _external=False))
 
             if roles:
                 # Resolve current role robustly: prefer session, fallback to get_current_user()
@@ -1321,7 +1321,7 @@ def login_required(*roles):
                     # when users navigate via the sidebar. Redirect silently.
                     if wants_json:
                         return jsonify({'success': False, 'error': 'Not authorized'}), 403
-                    return immediate_redirect(url_for('index', _external=True))
+                    return immediate_redirect(url_for('index', _external=False))
 
             return view_func(*args, **kwargs)
 
@@ -8440,8 +8440,14 @@ def archive_applicant(application_id):
                     print(f"➡️ Archive redirect decision: role_inner={role_inner}, ref_inner={ref_inner}, posted_redirect={posted_redirect}, redirect_target={redirect_target}")
                 except Exception:
                     pass
+                # Allow client to override redirect by posting a 'redirect' value, but keep role safety:
+                # - Admin can only override to admin archived page
+                # - HR can only override to HR archived page
                 if posted_redirect and (posted_redirect.startswith('/') or posted_redirect.startswith(url_for('archived_applicants')) or posted_redirect.startswith(url_for('admin_archived_applicants'))):
-                    redirect_target = posted_redirect
+                    if role_inner == 'admin' and posted_redirect.startswith(url_for('admin_archived_applicants')):
+                        redirect_target = posted_redirect
+                    elif role_inner != 'admin' and posted_redirect.startswith(url_for('archived_applicants')):
+                        redirect_target = posted_redirect
                 if (
                     request.is_json
                     or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
@@ -8486,7 +8492,10 @@ def archive_applicant(application_id):
 
     # Honor posted redirect for non-AJAX flows as well (sanitized)
     if posted_redirect and (posted_redirect.startswith('/') or posted_redirect.startswith(url_for('archived_applicants')) or posted_redirect.startswith(url_for('admin_archived_applicants'))):
-        return redirect(posted_redirect)
+        if (role or '').lower() == 'admin' and posted_redirect.startswith(url_for('admin_archived_applicants')):
+            return redirect(posted_redirect)
+        if (role or '').lower() != 'admin' and posted_redirect.startswith(url_for('archived_applicants')):
+            return redirect(posted_redirect)
     # Choose redirect purely by role to avoid unauthorized admin page access
     if (role or '').lower() == 'admin':
         return redirect(url_for('admin_archived_applicants'))
