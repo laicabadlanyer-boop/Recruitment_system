@@ -2168,6 +2168,8 @@ def fetch_archived_applicants_data():
 
     cursor = db.cursor(dictionary=True)
     try:
+        user = get_current_user()
+        branch_id = get_branch_scope(user)
         # Determine archiving strategy (robust): consider status values and archived_at column
         try:
             cursor.execute('SHOW COLUMNS FROM applications')
@@ -2186,6 +2188,7 @@ def fetch_archived_applicants_data():
         else:
             archived_clause = archived_status_clause
 
+        job_title_expr = job_column_expr('job_title', alias='j', alternatives=['title'], default="'Untitled Job'")
         archived_at_select = 'COALESCE(a.archived_at, a.applied_at) AS archived_at' if has_archived_at else 'a.applied_at AS archived_at'
         order_by_expr = 'COALESCE(a.archived_at, a.applied_at) DESC' if has_archived_at else 'a.applied_at DESC'
 
@@ -2193,17 +2196,20 @@ def fetch_archived_applicants_data():
             SELECT a.application_id, a.applicant_id, a.resume_id, a.status, a.applied_at AS submitted_at,
                    {archived_at_select},
                    ap.full_name AS applicant_name, ap.email AS applicant_email, ap.phone_number AS applicant_phone,
-                   j.job_title, j.branch_id, b.branch_name,
+                   {job_title_expr} AS job_title, j.branch_id, COALESCE(b.branch_name, 'All Branches') AS branch_name,
                    CASE WHEN a.resume_id IS NOT NULL THEN 1 ELSE 0 END AS has_resume
             FROM applications a
             LEFT JOIN applicants ap ON a.applicant_id = ap.applicant_id
             LEFT JOIN jobs j ON a.job_id = j.job_id
             LEFT JOIN branches b ON j.branch_id = b.branch_id
-            WHERE {archived_clause}
+            WHERE {archived_clause}""" + ((" AND j.branch_id = %s" ) if branch_id else "") + f"""
             ORDER BY {order_by_expr}
         """
 
-        cursor.execute(query)
+        if branch_id:
+            cursor.execute(query, (branch_id,))
+        else:
+            cursor.execute(query)
         archived = cursor.fetchall() or []
 
         # Format dates for display
@@ -18777,23 +18783,8 @@ def view_applicant(applicant_id):
     try:
         # Ensure schema compatibility before querying
         ensure_schema_compatibility()
-        # Admin can view all applicants, HR can only view applicants from their branch
+        # Determine HR branch scope, but do not block viewing if no matching applications
         branch_id = get_branch_scope(user)
-        if branch_id:  # Only restrict HR users, not admin
-            cursor.execute(
-                '''
-                SELECT DISTINCT ap.applicant_id
-                FROM applicants ap
-                JOIN applications a ON ap.applicant_id = a.applicant_id
-                JOIN jobs j ON a.job_id = j.job_id
-                WHERE ap.applicant_id = %s AND j.branch_id = %s
-                LIMIT 1
-                ''',
-                (applicant_id, branch_id),
-            )
-            if not cursor.fetchone():
-                flash('You can only view applicants from your branch.', 'error')
-                return redirect(url_for('applicants'))
         
         # Get applicant details (isolated try/except)
         try:
