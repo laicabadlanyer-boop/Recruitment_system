@@ -8325,7 +8325,12 @@ def archive_applicant(application_id):
     """Archive an application by setting status to 'archived' and archived_at timestamp."""
     user = get_current_user()
     db = get_db()
-    wants_json = request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.accept_json
+    wants_json = (
+        request.is_json
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.accept_mimetypes.accept_json
+        or ('application/json' in (request.headers.get('Accept') or '').lower())
+    )
     # Capture optional redirect preference from the client so both AJAX and non-AJAX flows
     posted_redirect = None
     try:
@@ -8426,8 +8431,8 @@ def archive_applicant(application_id):
                 except Exception:
                     role_inner = None
                 role_inner = (role_inner or '').lower()
-                # Prefer admin archived page if user role is admin or referrer came from admin UI
-                if role_inner == 'admin' or ('/admin/' in (ref_inner or '')):
+                # Choose redirect purely by role to avoid unauthorized admin page access
+                if role_inner == 'admin':
                     redirect_target = url_for('admin_archived_applicants', _external=False)
                 else:
                     redirect_target = url_for('archived_applicants', _external=False)
@@ -8447,7 +8452,12 @@ def archive_applicant(application_id):
             else:
                 db.rollback()
                 flash('Application not found.', 'error')
-                if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.accept_json:
+                if (
+                    request.is_json
+                    or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+                    or request.accept_mimetypes.accept_json
+                    or ('application/json' in (request.headers.get('Accept') or '').lower())
+                ):
                     return jsonify({'success': False, 'error': 'Application not found.'}), 404
         except Exception as e:
             db.rollback()
@@ -8477,9 +8487,8 @@ def archive_applicant(application_id):
     # Honor posted redirect for non-AJAX flows as well (sanitized)
     if posted_redirect and (posted_redirect.startswith('/') or posted_redirect.startswith(url_for('archived_applicants')) or posted_redirect.startswith(url_for('admin_archived_applicants'))):
         return redirect(posted_redirect)
-    if ref and '/admin/' in ref:
-        return redirect(url_for('admin_archived_applicants'))
-    if role == 'admin':
+    # Choose redirect purely by role to avoid unauthorized admin page access
+    if (role or '').lower() == 'admin':
         return redirect(url_for('admin_archived_applicants'))
     return redirect(url_for('archived_applicants'))
 
