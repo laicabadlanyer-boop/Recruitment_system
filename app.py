@@ -8319,6 +8319,7 @@ def delete_applicant_permanent():
 
 
 @app.route('/hr/applicants/<int:application_id>/archive', methods=['POST'])
+@app.route('/admin/applicants/<int:application_id>/archive', methods=['POST'])
 @login_required('hr', 'admin')
 def archive_applicant(application_id):
     """Archive an application by setting status to 'archived' and archived_at timestamp."""
@@ -19841,6 +19842,7 @@ def handle_csrf_error(e):
         request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         or request.accept_mimetypes.accept_json
         or request.is_json
+        or ('application/json' in (request.headers.get('Accept') or '').lower())
     )
     if request.endpoint == 'login' or '/login' in (request.path or ''):
         if wants_json:
