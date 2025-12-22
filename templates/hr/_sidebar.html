@@ -1,0 +1,245 @@
+<!-- HR Sidebar Component - Red, Black, White Design -->
+<!-- Mobile Overlay (outside sidebar) -->
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+<aside id="sidebar" class="w-72 bg-gray-900/95 backdrop-blur-md border-r border-gray-800 fixed top-[73px] left-0 h-[calc(100vh-73px)] transition-all duration-300 ease-in-out -translate-x-full lg:translate-x-0 z-40 shadow-2xl custom-scrollbar flex-shrink-0 overflow-y-auto">
+    
+    <!-- Mobile Close Button -->
+    <div class="flex justify-between items-center p-4 border-b border-gray-800 lg:hidden sticky top-0 bg-gray-900/95 backdrop-blur-md z-10">
+        <span class="font-semibold text-base sm:text-lg">Navigation</span>
+        <button id="close-sidebar" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-all" aria-label="Close sidebar">
+            <i class="fas fa-times text-lg"></i>
+        </button>
+    </div>
+    
+    <!-- Navigation Menu -->
+    <nav class="mt-2 sm:mt-6 px-2 sm:px-3 pb-6">
+        <ul class="space-y-1">
+            <!-- Dashboard -->
+            <li>
+                <a href="{{ url_for('hr_dashboard') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base {% if request.endpoint == 'hr_dashboard' %}active{% endif %}">
+                    <i class="fas fa-tachometer-alt w-5 sm:w-6 text-center"></i>
+                    <span class="ml-2 sm:ml-3 font-medium">Dashboard</span>
+                </a>
+            </li>
+            
+            <!-- Job Postings -->
+            <li>
+                <a href="{{ url_for('job_postings') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base {% if request.endpoint == 'job_postings' %}active{% endif %}">
+                    <i class="fas fa-briefcase w-5 sm:w-6 text-center"></i>
+                    <span class="ml-2 sm:ml-3 font-medium">Job Postings</span>
+                </a>
+            </li>
+            
+            <!-- Applicants -->
+            <li>
+                <a href="{{ url_for('applicants') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base {% if request.endpoint == 'applicants' %}active{% endif %}">
+                    <i class="fas fa-users w-5 sm:w-6 text-center"></i>
+                    <span class="ml-2 sm:ml-3 font-medium">Applicants</span>
+                </a>
+            </li>
+            
+            <!-- Archived Applicants -->
+            <li>
+                <a href="{{ url_for('archived_applicants') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base {% if request.endpoint == 'archived_applicants' %}active{% endif %}">
+                    <i class="fas fa-archive w-5 sm:w-6 text-center"></i>
+                    <span class="ml-2 sm:ml-3 font-medium">Archived Applicants</span>
+                </a>
+            </li>
+            
+            <!-- Interviews -->
+            <li>
+                <a href="{{ url_for('hr_interviews') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base {% if request.endpoint == 'hr_interviews' %}active{% endif %}">
+                    <i class="fas fa-calendar-alt w-5 sm:w-6 text-center"></i>
+                    <span class="ml-2 sm:ml-3 font-medium">Interviews</span>
+                </a>
+            </li>
+            
+            <!-- Reports & Analytics -->
+            <li>
+                <a href="{{ url_for('hr_reports_analytics') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base {% if request.endpoint == 'hr_reports_analytics' %}active{% endif %}">
+                    <i class="fas fa-chart-bar w-5 sm:w-6 text-center"></i>
+                    <span class="ml-2 sm:ml-3 font-medium">Reports & Analytics</span>
+                </a>
+            </li>
+            
+            <!-- Notifications -->
+            <li>
+                <a href="{{ url_for('hr_notifications') }}" class="sidebar-item flex items-center p-2.5 sm:p-3 rounded-lg text-gray-300 text-sm sm:text-base {% if request.endpoint == 'hr_notifications' %}active{% endif %}">
+                    <i class="fas fa-bell w-5 sm:w-6 text-center"></i>
+                    <span class="ml-2 sm:ml-3 font-medium">Notifications</span>
+                    {% if hr_notif_count and hr_notif_count > 0 %}
+                    <span class="ml-auto px-1.5 py-0.5 bg-red-600 text-white text-xs rounded-full font-bold flex-shrink-0 min-w-[1.25rem] text-center leading-none">{{ hr_notif_count }}</span>
+                    {% endif %}
+                </a>
+            </li>
+            
+            <!-- Divider -->
+            <li class="my-3">
+                <div class="h-px bg-gray-800/50 mx-3"></div>
+            </li>
+
+        </ul>
+    </nav>
+</aside>
+
+<style>
+/* Sidebar Item Styling - Consolidated with base styles */
+.sidebar-item {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+    position: relative;
+}
+
+.sidebar-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 0;
+    background: #dc2626;
+    transition: height 0.3s ease;
+    border-radius: 0 2px 2px 0;
+}
+
+.sidebar-item:hover {
+    border-color: rgba(220, 38, 38, 0.2);
+    background: rgba(220, 38, 38, 0.08);
+    transform: translateX(4px);
+    color: #fff;
+}
+
+.sidebar-item:hover::before {
+    height: 60%;
+}
+
+.sidebar-item.active {
+    border-color: rgba(220, 38, 38, 0.3);
+    background: rgba(220, 38, 38, 0.12);
+    color: #fff;
+}
+
+.sidebar-item.active::before {
+    height: 80%;
+}
+
+/* Sidebar Scrollbar Styling */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(220, 38, 38, 0.3);
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(220, 38, 38, 0.5);
+}
+
+/* Sidebar Overlay for Mobile */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 35;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+/* Ensure sidebar overlay doesn't block interactions when inactive */
+.sidebar-overlay { pointer-events: none; }
+.sidebar-overlay.active { pointer-events: auto; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const closeSidebarBtn = document.getElementById('close-sidebar');
+    
+    function openSidebar() {
+        if (sidebar) {
+            sidebar.classList.remove('-translate-x-full');
+            if (overlay) {
+                overlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    }
+    
+    function closeSidebar() {
+        if (sidebar) {
+            sidebar.classList.add('-translate-x-full');
+            if (overlay) {
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+    }
+    
+    // Mobile menu toggle
+    if (mobileMenuBtn) {
+        mobileMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (sidebar && sidebar.classList.contains('-translate-x-full')) {
+                openSidebar();
+            } else {
+                closeSidebar();
+            }
+        });
+    }
+    
+    // Close button
+    if (closeSidebarBtn) {
+        closeSidebarBtn.addEventListener('click', closeSidebar);
+    }
+    
+    // Close on overlay click
+    if (overlay) {
+        overlay.addEventListener('click', closeSidebar);
+    }
+    
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth < 1024 && sidebar && overlay) {
+            if (!sidebar.contains(e.target) && !mobileMenuBtn?.contains(e.target)) {
+                if (overlay.classList.contains('active')) {
+                    closeSidebar();
+                }
+            }
+        }
+    });
+    
+    // Close on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && window.innerWidth < 1024 && overlay?.classList.contains('active')) {
+            closeSidebar();
+        }
+    });
+    
+    // Responsive sidebar behavior
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 1024) {
+            if (sidebar) sidebar.classList.remove('-translate-x-full');
+            if (overlay) overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        } else {
+            closeSidebar();
+        }
+    });
+});
+</script>
