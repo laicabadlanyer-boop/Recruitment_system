@@ -41,6 +41,7 @@ def build_admin_dashboard_data(user, branch_id=None):
         pending_query + " AND a.applied_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
         tuple(pending_params),
     )
+    stats['pending'] = fetch_count(pending_query, tuple(pending_params))
 
     def dated_application_count(condition):
         query = f"""
@@ -57,6 +58,18 @@ def build_admin_dashboard_data(user, branch_id=None):
 
     stats['new_applications_today'] = dated_application_count("DATE(a.applied_at) = CURDATE()")
     stats['new_applications_week'] = dated_application_count("a.applied_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+    try:
+        if branch_id:
+            stats['new_jobs_this_week'] = fetch_count(
+                "SELECT COUNT(*) AS count FROM jobs j WHERE j.branch_id = %s AND j.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
+                (branch_id,),
+            )
+        else:
+            stats['new_jobs_this_week'] = fetch_count(
+                "SELECT COUNT(*) AS count FROM jobs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+            )
+    except Exception:
+        stats['new_jobs_this_week'] = 0
 
     def interviews_count(condition):
         query = f"""
