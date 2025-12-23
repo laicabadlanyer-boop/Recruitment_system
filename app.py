@@ -913,6 +913,11 @@ def ensure_schema_compatibility():
                 # Fallback: try to ensure column exists
                 updates_applied |= ensure_column(cursor, 'interviews', 'status', "ENUM('scheduled', 'confirmed', 'rescheduled', 'completed', 'cancelled', 'no_show') DEFAULT 'scheduled'")
             
+            # Ensure applicants table has required columns (created_at, last_login, phone_number)
+            updates_applied |= ensure_column(cursor, 'applicants', 'created_at', "DATETIME DEFAULT CURRENT_TIMESTAMP")
+            updates_applied |= ensure_column(cursor, 'applicants', 'last_login', "DATETIME DEFAULT NULL")
+            updates_applied |= ensure_column(cursor, 'applicants', 'phone_number', "VARCHAR(20) DEFAULT NULL")
+
             # Ensure applications table status enum includes 'scheduled'
             try:
                 cursor.execute("""
@@ -18793,29 +18798,40 @@ def view_applicant(applicant_id):
         pass
     try:
         # Ensure schema compatibility before querying
-        ensure_schema_compatibility()
+        try:
+            ensure_schema_compatibility()
+        except Exception as e:
+            print(f"⚠️ Schema check failed in view_applicant: {e}")
+
         # Determine HR branch scope, but do not block viewing if no matching applications
         branch_id = get_branch_scope(user)
         
         # Get applicant details (isolated try/except)
         try:
-            cursor.execute(
-                '''
-                SELECT ap.applicant_id, ap.full_name, ap.email, ap.phone_number, 
-                       ap.created_at, ap.last_login
+            cursor.execute('SHOW COLUMNS FROM applicants')
+            cols = {row[0] if isinstance(row, tuple) else (row.get('Field') if isinstance(row, dict) else None) for row in (cursor.fetchall() or [])}
+            select_fields = [
+                'ap.applicant_id',
+                'ap.full_name',
+                'ap.email',
+            ]
+            select_fields.append('ap.phone_number' if 'phone_number' in cols else 'NULL AS phone_number')
+            select_fields.append('ap.created_at' if 'created_at' in cols else 'NULL AS created_at')
+            select_fields.append('ap.last_login' if 'last_login' in cols else 'NULL AS last_login')
+            query = f"""
+                SELECT {', '.join(select_fields)}
                 FROM applicants ap
                 WHERE ap.applicant_id = %s
                 LIMIT 1
-                ''',
-                (applicant_id,),
-            )
+            """
+            cursor.execute(query, (applicant_id,))
             applicant = cursor.fetchone()
         except Exception as e:
             applicant = None
             print(f'⚠️ Error fetching applicant details for id={applicant_id}: {e}')
 
         if not applicant:
-            flash('Applicant not found.', 'error')
+            flash(f'Applicant not found (ID: {applicant_id})', 'error')
             return redirect(url_for('applicants'))
         
         # Get applicant's applications (isolated)
@@ -19104,7 +19120,7 @@ def view_applicant(applicant_id):
         error_details = traceback.format_exc()
         print(f'❌ View applicant error: {exc} (user={user and user.get("id")}, role={user and user.get("role")}, applicant_id={applicant_id})')
         print(f'Full traceback: {error_details}')
-        flash('An error occurred while loading applicant details.', 'error')
+        flash(f'An error occurred while loading applicant details: {exc}', 'error')
         return redirect(url_for('applicants'))
     finally:
         if cursor:
