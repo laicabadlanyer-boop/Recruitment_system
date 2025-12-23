@@ -13202,6 +13202,11 @@ def applicants():
         cursor.close()
 
 
+@app.route('/hr/applicants', methods=['GET', 'POST'])
+@login_required('hr', 'admin')
+def hr_applicants():
+    return applicants()
+
 @app.route('/admin/applications', methods=['GET', 'POST'])
 @login_required('admin', 'hr')
 def applications():
