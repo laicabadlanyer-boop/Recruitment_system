@@ -10244,18 +10244,30 @@ def admin_view_resume_by_path():
 @app.route('/admin/dashboard')
 @login_required('admin', 'hr')
 def admin_dashboard():
-    dashboard_data = build_admin_dashboard_data(get_current_user())
-    # Add theme CSS for branch-specific UI
-    branch_info = dashboard_data.get('branch_info', {})
-    if branch_info:
-        dashboard_data['theme_css'] = get_branch_theme_css(branch_info)
-        dashboard_data['branch_banner_style'] = get_branch_banner_style(branch_info)
-        dashboard_data['branch_logo_html'] = get_branch_logo_html(branch_info)
-    else:
-        dashboard_data['theme_css'] = get_branch_theme_css(None)
-        dashboard_data['branch_banner_style'] = get_branch_banner_style(None)
-        dashboard_data['branch_logo_html'] = get_branch_logo_html(None)
-    return render_template('admin/admin_dashboard.html', dashboard_data=dashboard_data)
+    try:
+        user = get_current_user()
+        dashboard_data = build_admin_dashboard_data(user)
+        branch_info = dashboard_data.get('branch_info', {})
+        dashboard_data['theme_css'] = get_branch_theme_css(branch_info if branch_info else None)
+        dashboard_data['branch_banner_style'] = get_branch_banner_style(branch_info if branch_info else None)
+        dashboard_data['branch_logo_html'] = get_branch_logo_html(branch_info if branch_info else None)
+        return render_template('admin/admin_dashboard.html', dashboard_data=dashboard_data)
+    except Exception as exc:
+        print(f'❌ Admin dashboard error: {exc}')
+        flash('Unable to load dashboard right now. Showing minimal view.', 'error')
+        fallback = {
+            'user': {'full_name': (get_current_user() or {}).get('name', ''), 'role': (get_current_user() or {}).get('role', '')},
+            'stats': {'open_jobs': 0, 'total_applicants': 0, 'hired_applications': 0, 'total_applications': 0, 'interviews_today': 0, 'total_interviews': 0, 'success_rate': 0},
+            'recent_applications': [],
+            'recent_activity': [],
+            'upcoming_interviews': [],
+            'active_sessions': [],
+            'branch_info': {},
+            'theme_css': get_branch_theme_css(None),
+            'branch_banner_style': get_branch_banner_style(None),
+            'branch_logo_html': get_branch_logo_html(None),
+        }
+        return render_template('admin/admin_dashboard.html', dashboard_data=fallback)
 
 
 
