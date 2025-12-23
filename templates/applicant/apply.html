@@ -967,6 +967,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle form submission
     form.addEventListener('submit', async function(e) {
+        if (form.dataset.useNative === '1') {
+            return;
+        }
         e.preventDefault();
         // Prevent submission if application was viewed by HR (server-side enforced)
         if (applicationViewed) {
@@ -982,15 +985,16 @@ document.addEventListener('DOMContentLoaded', function() {
             // Create FormData
             const formData = new FormData(form);
             
-            // Add all files to FormData
-            uploadedFiles.forEach((fileData, index) => {
+            // Add only local files to FormData
+            const localFiles = uploadedFiles.filter(f => !!f.file);
+            localFiles.forEach((fileData, index) => {
                 formData.append(`file_${index}`, fileData.file);
                 formData.append(`file_name_${index}`, fileData.name);
                 formData.append(`file_type_${index}`, fileData.type);
             });
             
             // Add total file count
-            formData.append('total_files', uploadedFiles.length);
+            formData.append('total_files', localFiles.length);
             
             const controller = new AbortController();
             const TIMEOUT_MS = 20000;
@@ -998,6 +1002,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Submit form via fetch
             const response = await fetch(form.action, {
                 method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json,text/html'
+                },
                 body: formData,
                 signal: controller.signal
             });
@@ -1060,12 +1068,21 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error submitting form:', error);
             if (error && (error.name === 'AbortError' || String(error).toLowerCase().includes('aborted'))) {
                 showError('Na-timeout ang request. Palihug i-try pag submit balik.');
-            } else {
-                showError('An error occurred while submitting your application. Please try again.');
+                if (!applicationViewed) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '{{ "Update application" if edit_application_id else "Submit application" }}';
+                }
+                return;
             }
-            if (!applicationViewed) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '{{ "Update application" if edit_application_id else "Submit application" }}';
+            // Fallback to native form submission to ensure application is posted
+            try {
+                form.dataset.useNative = '1';
+                form.submit();
+            } catch (_) {
+                if (!applicationViewed) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '{{ "Update application" if edit_application_id else "Submit application" }}';
+                }
             }
         }
     });
