@@ -143,6 +143,72 @@ def build_admin_dashboard_data(user, branch_id=None):
         tuple(interview_params),
     )
 
+    job_title_expr = job_column_expr('job_title', alias='j', alternatives=['title'], default="'Untitled Job'")
+    recent_params = []
+    recent_where = ""
+    if branch_id:
+        recent_where = " AND j.branch_id = %s"
+        recent_params.append(branch_id)
+    recent_pending_rows = fetch_rows(
+        f"""
+        SELECT a.application_id,
+               ap.full_name AS applicant_name,
+               {job_title_expr} AS job_title,
+               a.status,
+               a.applied_at
+        FROM applications a
+        JOIN applicants ap ON ap.applicant_id = a.applicant_id
+        JOIN jobs j ON j.job_id = a.job_id
+        WHERE LOWER(COALESCE(a.status,'')) = 'pending'{recent_where}
+        ORDER BY a.applied_at DESC
+        LIMIT 10
+        """,
+        tuple(recent_params) if recent_params else None,
+    )
+    formatted_recent_applications = [
+        {
+            'application_id': row.get('application_id'),
+            'applicant_name': row.get('applicant_name'),
+            'position_applied': row.get('job_title'),
+            'status_key': (row.get('status') or '').lower(),
+            'submitted_at': format_human_datetime(row.get('applied_at')),
+        }
+        for row in recent_pending_rows
+    ]
+
+    recent_jobs_rows = fetch_rows(
+        f"""
+        SELECT j.job_id,
+               {job_title_expr} AS job_title,
+               COALESCE(j.status, 'open') AS status,
+               j.created_at AS posted_at
+        FROM jobs j
+        {"WHERE j.branch_id = %s" if branch_id else ""}
+        ORDER BY j.created_at DESC
+        LIMIT 10
+        """,
+        (branch_id,) if branch_id else None,
+    )
+    formatted_recent_jobs = [
+        {
+            'job_id': row.get('job_id'),
+            'title': row.get('job_title'),
+            'posted_at': format_human_datetime(row.get('posted_at')),
+            'status_key': (row.get('status') or '').lower(),
+        }
+        for row in recent_jobs_rows
+    ]
+
+    if branch_id:
+        try:
+            branch_rows = fetch_rows(
+                "SELECT branch_id, branch_name, address FROM branches WHERE branch_id = %s LIMIT 1",
+                (branch_id,),
+            )
+            branch_info = branch_rows[0] if branch_rows else {}
+        except Exception:
+            branch_info = {}
+
     formatted_upcoming_interviews = [
         {
             'interview_id': row.get('interview_id'),
@@ -305,7 +371,7 @@ def build_admin_dashboard_data(user, branch_id=None):
     active_sessions = fetch_rows(
         """
         SELECT s.session_id,
-               s.created_at,
+               s.created_at AS login_time,
                u.email,
                u.user_type
         FROM auth_sessions s
