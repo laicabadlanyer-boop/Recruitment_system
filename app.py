@@ -12995,6 +12995,11 @@ def applicants():
 
         where_sql = ' AND '.join(where_clauses) if where_clauses else '1=1'
 
+        cursor.execute("SHOW TABLES LIKE 'resumes'")
+        has_resumes = cursor.fetchone() is not None
+        resume_file_select = ('r.file_name AS resume_file_name') if has_resumes else ('NULL AS resume_file_name')
+        total_docs_select = ('(SELECT COUNT(*) FROM resumes r2 WHERE r2.applicant_id = ap.applicant_id) AS total_documents') if has_resumes else ('0 AS total_documents')
+        resumes_join_sql = ' LEFT JOIN resumes r ON a.resume_id = r.resume_id' if has_resumes else ''
         query = f'''
              SELECT a.application_id,
                  a.applicant_id,
@@ -13010,13 +13015,13 @@ def applicants():
                  a.job_id,
                  j.branch_id,
                  a.resume_id,
-                 r.file_name AS resume_file_name,
+                 {resume_file_select},
                  ap.created_at AS applicant_created_at,
-                 (SELECT COUNT(*) FROM resumes r2 WHERE r2.applicant_id = ap.applicant_id) AS total_documents
+                 {total_docs_select}
             FROM applications a
             JOIN applicants ap ON a.applicant_id = ap.applicant_id
              LEFT JOIN jobs j ON a.job_id = j.job_id
-             LEFT JOIN resumes r ON a.resume_id = r.resume_id
+             {resumes_join_sql}
             LEFT JOIN branches b ON j.branch_id = b.branch_id
             WHERE {where_sql}
             ORDER BY a.applied_at DESC
