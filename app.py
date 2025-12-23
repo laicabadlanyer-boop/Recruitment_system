@@ -10578,6 +10578,22 @@ def api_recent_applicants():
         print(f'❌ API recent applicants error: {exc}')
         return jsonify({'success': False, 'recent_applicants': []}), 500
 
+@app.route('/api/branches', methods=['GET'])
+@login_required('admin', 'hr')
+def api_branches():
+    try:
+        rows = fetch_branches() or []
+        branches = []
+        for r in rows:
+            branches.append({
+                'branch_id': r.get('branch_id'),
+                'branch_name': r.get('branch_name') or 'All Branches',
+            })
+        return jsonify({'success': True, 'branches': branches})
+    except Exception as exc:
+        print(f'❌ API branches error: {exc}')
+        return jsonify({'success': False, 'branches': []}), 500
+
 @app.route('/admin/notifications')
 @login_required('admin', 'hr')
 def admin_notifications():
