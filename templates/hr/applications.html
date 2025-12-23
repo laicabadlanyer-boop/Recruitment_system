@@ -1017,6 +1017,7 @@
                     const statusBadge = getStatusBadgeClass(status);
                     const resumeViewUrl = app.resume_id ? `/admin/resumes/${app.resume_id}/view` : null;
                     const resumeDownloadUrl = app.resume_id ? `/admin/resumes/${app.resume_id}/download` : null;
+                    const applicantViewUrl = app.applicant_id ? `/hr/applicants/${app.applicant_id}` : null;
                     
                     return `
                         <div class="bg-gray-800/50 rounded-lg p-3 border border-purple-600/30 hover:bg-gray-800/70 transition-colors">
@@ -1054,8 +1055,15 @@
                                     </div>
                                 </div>
                                 <div class="flex flex-col gap-2 flex-shrink-0">
+                                    ${applicantViewUrl ? `
+                                        <a href="${applicantViewUrl}" 
+                                           class="px-3 py-1.5 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors text-center" 
+                                           title="View Applicant">
+                                            <i class="fas fa-user mr-1"></i>Profile
+                                        </a>
+                                    ` : ''}
                                     ${resumeViewUrl ? `
-                                        <a href="${resumeViewUrl}" target="_blank" 
+                                        <a href="${resumeViewUrl}" 
                                            class="px-3 py-1.5 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors text-center" 
                                            title="View Resume">
                                             <i class="fas fa-eye mr-1"></i>View
@@ -1093,6 +1101,7 @@
                     const statusBadge = getStatusBadgeClass(status);
                     const resumeViewUrl = app.resume_id ? `/admin/resumes/${app.resume_id}/view` : null;
                     const resumeDownloadUrl = app.resume_id ? `/admin/resumes/${app.resume_id}/download` : null;
+                    const applicantViewUrl = app.applicant_id ? `/hr/applicants/${app.applicant_id}` : null;
                     
                     return `
                         <div class="bg-gray-800/50 rounded-lg p-3 border border-cyan-600/30 hover:bg-gray-800/70 transition-colors">
@@ -1118,8 +1127,15 @@
                                     </div>
                                 </div>
                                 <div class="flex flex-col gap-2 flex-shrink-0">
+                                    ${applicantViewUrl ? `
+                                        <a href="${applicantViewUrl}" 
+                                           class="px-3 py-1.5 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors text-center" 
+                                           title="View Applicant">
+                                            <i class="fas fa-user mr-1"></i>Profile
+                                        </a>
+                                    ` : ''}
                                     ${resumeViewUrl ? `
-                                        <a href="${resumeViewUrl}" target="_blank" 
+                                        <a href="${resumeViewUrl}" 
                                            class="px-3 py-1.5 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors text-center" 
                                            title="View Resume">
                                             <i class="fas fa-eye mr-1"></i>View
