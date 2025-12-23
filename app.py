@@ -18889,20 +18889,23 @@ def view_applicant(applicant_id):
             resumes = []
             print(f'⚠️ Error fetching resumes for applicant_id={applicant_id}: {e}')
         
-        # Get all attachments from applications
-        cursor.execute(
-            '''
-            SELECT DISTINCT r.resume_id, r.file_name, r.file_path, r.uploaded_at, r.file_type
-            FROM application_attachments aa
-            JOIN applications a ON aa.application_id = a.application_id
-            JOIN resumes r ON aa.resume_id = r.resume_id
-            WHERE a.applicant_id = %s
-            ORDER BY r.uploaded_at DESC
-            ''',
-            (applicant_id,),
-        )
+        app_attachments = []
         try:
-            app_attachments = cursor.fetchall() or []
+            cursor.execute("SHOW TABLES LIKE 'application_attachments'")
+            table_exists = cursor.fetchone() is not None
+            if table_exists:
+                cursor.execute(
+                    '''
+                    SELECT DISTINCT r.resume_id, r.file_name, r.file_path, r.uploaded_at, r.file_type
+                    FROM application_attachments aa
+                    JOIN applications a ON aa.application_id = a.application_id
+                    JOIN resumes r ON aa.resume_id = r.resume_id
+                    WHERE a.applicant_id = %s
+                    ORDER BY r.uploaded_at DESC
+                    ''',
+                    (applicant_id,),
+                )
+                app_attachments = cursor.fetchall() or []
         except Exception as e:
             app_attachments = []
             print(f'⚠️ Error fetching application attachments: {e}')
