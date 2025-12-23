@@ -19127,6 +19127,11 @@ def view_applicant(applicant_id):
             cursor.close()
 
 
+@app.route('/hr/applicants/<int:applicant_id>')
+@login_required('admin', 'hr')
+def hr_view_applicant(applicant_id):
+    return view_applicant(applicant_id)
+
 @app.route('/admin/applicants/<int:applicant_id>/verify', methods=['POST'])
 @login_required('admin', 'hr')
 def verify_applicant(applicant_id):
