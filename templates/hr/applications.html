@@ -509,7 +509,7 @@
                                 <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold bg-gray-800/60 text-white rounded-full border border-gray-700 mr-2" title="Documents uploaded">{{ _docs_count }}</span>
                                 {% endif %}
                                 <a href="{{ url_for('hr_view_applicant', applicant_id=app.applicant_id) }}" 
-                                   class="px-2 py-1 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors" 
+                                   class="force-view-nav px-2 py-1 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors" 
                                    title="View Applicant Details">
                                     <i class="fas fa-eye"></i>
                                 </a>
@@ -623,7 +623,7 @@
                     <div class="flex items-center gap-2">
                         {% if app.has_resume and app.resume_id %}
                         <a href="{{ url_for('hr_view_applicant', applicant_id=app.applicant_id) }}" 
-                           class="px-2 py-1 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors" 
+                           class="force-view-nav px-2 py-1 text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded border border-blue-600/30 transition-colors" 
                            title="View Applicant Details">
                             <i class="fas fa-eye"></i>
                         </a>
@@ -832,6 +832,16 @@
 
 {% block extra_js %}
 <script>
+    document.addEventListener('click', function(ev){
+        try{
+            var a = ev.target && ev.target.closest && ev.target.closest('a.force-view-nav');
+            if (!a) return;
+            var href = a.getAttribute && a.getAttribute('href');
+            if (!href) return;
+            ev.preventDefault();
+            window.location.href = href;
+        }catch(e){}
+    }, { capture: true });
     // Modal functions
     // Make all functions globally accessible
     window.openModal = function(modalId) {
