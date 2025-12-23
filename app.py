@@ -440,6 +440,11 @@ def build_admin_dashboard_data(user, branch_id=None):
 
     return dashboard
 
+_dashboard_cache = {}
+def _cache_key(u, bid):
+    r = (u or {}).get('role')
+    return f"{r or 'user'}:{bid if bid is not None else 'all'}"
+
 import os
 import mimetypes
 import re
@@ -7933,12 +7938,11 @@ Your application has been successfully submitted. Our team will review your appl
 Best regards,
 J&T Express Recruitment Team
             """.strip()
-            
+                import threading
                 try:
-                    send_email(applicant_email, email_subject, email_body)
-                    print(f'✅ Confirmation email sent to applicant {applicant_email}')
-                except Exception as email_err:
-                    print(f'⚠️ Error sending confirmation email: {email_err}')
+                    threading.Thread(target=send_email, args=(applicant_email, email_subject, email_body), daemon=True).start()
+                except Exception:
+                    pass
             
             # AUTOMATIC: Notify HR about new application (system notification + email)
             # HR will see this notification when they view branch-scoped notifications
@@ -8030,10 +8034,9 @@ J&T Express Recruitment System
                             hr_email = hr_user.get('email')
                             if hr_email:
                                 try:
-                                    send_email(hr_email, email_subject, email_body)
-                                    print(f'✅ HR notification email sent to {hr_email} for application {application_id}')
-                                except Exception as email_err:
-                                    print(f'⚠️ Error sending HR notification email to {hr_email}: {email_err}')
+                                    threading.Thread(target=send_email, args=(hr_email, email_subject, email_body), daemon=True).start()
+                                except Exception:
+                                    pass
                         print(f'✅ HR notification emails sent to {len(hr_users)} HR user(s) for application {application_id}')
                     else:
                         print(f'⚠️ No HR users found for branch {branch_id} - no emails sent')
@@ -10259,16 +10262,48 @@ def admin_view_resume_by_path():
 def admin_dashboard():
     try:
         user = get_current_user()
-        dashboard_data = build_admin_dashboard_data(user)
+        # Persist and apply branch filter when available to prevent data loss on refresh/navigation
+        selected_branch_id = request.args.get('branch_id', type=int)
+        if selected_branch_id is None:
+            selected_branch_id = session.get('branch_id')
+        if selected_branch_id is None:
+            # Default to user's assigned branch if any; admins often have None (all branches)
+            selected_branch_id = (user or {}).get('branch_id')
+        if selected_branch_id is not None:
+            session['branch_id'] = selected_branch_id
+
+        ck = _cache_key(user, selected_branch_id)
+        dashboard_data = build_admin_dashboard_data(user, branch_id=selected_branch_id)
+        _dashboard_cache[ck] = dashboard_data
         branch_info = dashboard_data.get('branch_info', {})
         dashboard_data['theme_css'] = get_branch_theme_css(branch_info if branch_info else None)
         dashboard_data['branch_banner_style'] = get_branch_banner_style(branch_info if branch_info else None)
         dashboard_data['branch_logo_html'] = get_branch_logo_html(branch_info if branch_info else None)
+        if selected_branch_id is not None:
+            # Provide filtered branch metadata for template display
+            dashboard_data['filtered_branch_id'] = selected_branch_id
+            try:
+                if branch_info and branch_info.get('branch_name'):
+                    dashboard_data['filtered_branch_name'] = branch_info.get('branch_name')
+                else:
+                    # Best-effort lookup of branch name
+                    rows = fetch_rows("SELECT branch_name FROM branches WHERE branch_id = %s LIMIT 1", (selected_branch_id,))
+                    dashboard_data['filtered_branch_name'] = (rows[0].get('branch_name') if rows else None)
+            except Exception:
+                dashboard_data['filtered_branch_name'] = None
         return render_template('admin/admin_dashboard.html', dashboard_data=dashboard_data)
     except Exception as exc:
         print(f'❌ Admin dashboard error: {exc}')
         flash('Unable to load dashboard right now. Showing minimal view.', 'error')
-        fallback = {
+        # Use branch-aware cache key if available
+        try:
+            user = get_current_user()
+            bid = session.get('branch_id')
+        except Exception:
+            user = get_current_user()
+            bid = None
+        cached = _dashboard_cache.get(_cache_key(user, bid)) or {}
+        fallback = cached if cached else {
             'user': {'full_name': (get_current_user() or {}).get('name', ''), 'role': (get_current_user() or {}).get('role', '')},
             'stats': {'open_jobs': 0, 'total_applicants': 0, 'hired_applications': 0, 'total_applications': 0, 'interviews_today': 0, 'total_interviews': 0, 'success_rate': 0},
             'recent_applications': [],
@@ -10311,11 +10346,12 @@ def hr_dashboard():
         # Build main dashboard data (filtered by HR's assigned branch)
         try:
             dashboard_data = build_admin_dashboard_data(user, branch_id=selected_branch_id)
+            _dashboard_cache[_cache_key(user, selected_branch_id)] = dashboard_data
         except Exception as build_error:
             print(f'❌ Error building dashboard data: {build_error}')
             import traceback
             traceback.print_exc()
-            dashboard_data = {
+            dashboard_data = _dashboard_cache.get(_cache_key(user, selected_branch_id)) or {
                 'user': {'full_name': user.get('name', 'HR User'), 'email': user.get('email', ''), 'role': 'hr'},
                 'stats': {},
                 'metrics': {},
