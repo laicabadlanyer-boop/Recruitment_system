@@ -205,7 +205,7 @@
           <td class="px-6 py-4 text-gray-300">
             <div class="flex items-center gap-2">
                   <a href="{{ url_for('hr_view_applicant', applicant_id=app.applicant_id) }}"
-                 class="px-2 py-1 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/20 hover:border-blue-600/40 transition-colors flex items-center gap-1 rounded" 
+                 class="force-view-nav px-2 py-1 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/20 hover:border-blue-600/40 transition-colors flex items-center gap-1 rounded" 
                  title="View Applicant Details">
                 <i class="fas fa-eye"></i>
                 <span>View</span>
@@ -442,6 +442,17 @@ window.exportCandidates = function() {
   a.click();
   window.URL.revokeObjectURL(url);
 }
+
+document.addEventListener('click', function(ev){
+  try{
+    var a = ev.target && ev.target.closest && ev.target.closest('a.force-view-nav');
+    if (!a) return;
+    var href = a.getAttribute && a.getAttribute('href');
+    if (!href) return;
+    ev.preventDefault();
+    window.location.href = href;
+  }catch(e){}
+}, { capture: true });
 </script>
 
 <!-- Archive direct fallback removed - use global submit/click interceptors in base templates for immediate archive + redirect -->
