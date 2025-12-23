@@ -8531,7 +8531,8 @@ def delete_applicant_now(application_id):
     db = get_db()
     if not db:
         flash('Database connection error.', 'error')
-        return redirect(url_for('applicants'))
+        redirect_target = 'hr_applicants' if (user and (user.get('role') or '').lower() == 'hr') else 'applicants'
+        return redirect(url_for(redirect_target))
 
     cursor = db.cursor()
     try:
@@ -18858,7 +18859,8 @@ def view_applicant(applicant_id):
 
         if not applicant:
             flash(f'Applicant not found (ID: {applicant_id})', 'error')
-            return redirect(url_for('applicants'))
+            redirect_target = 'hr_applicants' if (user and (user.get('role') or '').lower() == 'hr') else 'applicants'
+            return redirect(url_for(redirect_target))
         
         # Get applicant's applications (isolated)
         try:
@@ -19150,7 +19152,8 @@ def view_applicant(applicant_id):
         print(f'❌ View applicant error: {exc} (user={user and user.get("id")}, role={user and user.get("role")}, applicant_id={applicant_id})')
         print(f'Full traceback: {error_details}')
         flash(f'An error occurred while loading applicant details: {exc}', 'error')
-        return redirect(url_for('applicants'))
+        redirect_target = 'hr_applicants' if (user and (user.get('role') or '').lower() == 'hr') else 'applicants'
+        return redirect(url_for(redirect_target))
     finally:
         if cursor:
             cursor.close()
