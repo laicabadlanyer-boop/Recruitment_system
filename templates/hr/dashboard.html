@@ -321,132 +321,145 @@
 
 {% block extra_js %}
 <script>
+let branchesController = null;
+let applicantsController = null;
 document.addEventListener('DOMContentLoaded', function(){
     const select = document.getElementById('branch-select');
     if (!select) return;
 
-    let _refreshBranchesRunning = false;
     async function refreshBranches(){
-        return;
-        if (_refreshBranchesRunning) return;
-        _refreshBranchesRunning = true;
-        try{
-            const url = new URL('/api/branches', window.location.origin).toString();
-            const res = await fetch(url, { mode: 'same-origin', cache: 'no-store', keepalive: true });
-            if (!res.ok) return;
-            const data = await res.json();
-            if (!data.success) return;
-            const branches = data.branches || [];
-
-            // preserve current selection
-            const current = select.value;
-            // remove existing options except the 'all' option
-            const allOption = select.querySelector('option[value="all"]');
-            select.innerHTML = '';
-            if (allOption) select.appendChild(allOption);
-            // ensure 'All Branches' option exists
-            if (!select.querySelector('option[value="all"]')){
-                const opt = document.createElement('option');
-                opt.value = 'all'; opt.textContent = 'All Branches';
-                select.appendChild(opt);
-            }
-
-            for (const b of branches){
-                const opt = document.createElement('option');
-                opt.value = b.branch_id;
-                opt.textContent = b.branch_name;
-                select.appendChild(opt);
-            }
-
-            // If server-side didn't render branch cards, render minimal cards client-side
+        const maxRetries = 2;
+        const retryDelay = 1000;
+        const timeoutMs = 5000;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
             try{
-                const cardsContainer = document.getElementById('branch-cards');
-                if (cardsContainer) {
-                    // If container only contains the 'No branch data available' placeholder or is empty, render cards
-                    const hasMeaningfulCard = Array.from(cardsContainer.children).some(c => !c.classList.contains('col-span-full'));
-                    if (!hasMeaningfulCard) {
-                        // Clear existing placeholder
-                        cardsContainer.innerHTML = '';
-                        for (const b of branches) {
-                            const card = document.createElement('div');
-                            card.className = 'rounded-xl shadow-lg p-6 branch-card transition-all';
-                            card.setAttribute('data-branch-id', b.branch_id || '');
-                            card.innerHTML = `\
-                                <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">\
-                                    <h3 class="text-lg font-bold text-white">${escapeHtml(b.branch_name || 'All Branches')}</h3>\
-                                    <span class="px-2 py-1 bg-green-600/20 text-green-400 border border-green-600/30 text-xs rounded-full">Active</span>\
-                                </div>\
-                                <div class="grid grid-cols-2 gap-4">\
-                                    <div class="text-center">\
-                                        <div class="text-2xl font-bold text-hr-red">0</div>\
-                                        <div class="text-gray-400 text-sm">Open Job Positions</div>\
+                if (branchesController) { try { branchesController.abort(); } catch(_){ } }
+                branchesController = new AbortController();
+                const t = setTimeout(() => { try { branchesController.abort(); } catch(_){ } }, timeoutMs);
+                const res = await fetch('/api/branches', { credentials: 'same-origin', signal: branchesController.signal });
+                clearTimeout(t);
+                if (!res.ok) {
+                    if (attempt < maxRetries && res.status >= 500) {
+                        await new Promise(r => setTimeout(r, retryDelay));
+                        continue;
+                    }
+                    return;
+                }
+                const ct = res.headers.get('content-type') || '';
+                if (ct.toLowerCase().indexOf('application/json') === -1) return;
+                const data = await res.json();
+                if (!data.success) {
+                    if (attempt < maxRetries) {
+                        await new Promise(r => setTimeout(r, retryDelay));
+                        continue;
+                    }
+                    return;
+                }
+                const branches = data.branches || [];
+                const current = select.value;
+                const allOption = select.querySelector('option[value="all"]');
+                select.innerHTML = '';
+                if (allOption) select.appendChild(allOption);
+                if (!select.querySelector('option[value="all"]')){
+                    const opt = document.createElement('option');
+                    opt.value = 'all'; opt.textContent = 'All Branches';
+                    select.appendChild(opt);
+                }
+                for (const b of branches){
+                    const opt = document.createElement('option');
+                    opt.value = b.branch_id;
+                    opt.textContent = b.branch_name;
+                    select.appendChild(opt);
+                }
+                try{
+                    const cardsContainer = document.getElementById('branch-cards');
+                    if (cardsContainer) {
+                        const hasMeaningfulCard = Array.from(cardsContainer.children).some(c => !c.classList.contains('col-span-full'));
+                        if (!hasMeaningfulCard) {
+                            cardsContainer.innerHTML = '';
+                            for (const b of branches) {
+                                const card = document.createElement('div');
+                                card.className = 'rounded-xl shadow-lg p-6 branch-card transition-all';
+                                card.setAttribute('data-branch-id', b.branch_id || '');
+                                card.innerHTML = '\
+                                    <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">\
+                                        <h3 class="text-lg font-bold text-white">'+escapeHtml(b.branch_name || 'All Branches')+'</h3>\
+                                        <span class="px-2 py-1 bg-green-600/20 text-green-400 border border-green-600/30 text-xs rounded-full">Active</span>\
                                     </div>\
-                                    <div class="text-center">\
-                                        <div class="text-2xl font-bold text-hr-red">0</div>\
-                                        <div class="text-gray-400 text-sm">Applicants</div>\
-                                    </div>\
-                                    <div class="text-center">\
-                                        <div class="text-2xl font-bold text-hr-red">0</div>\
-                                        <div class="text-gray-400 text-sm">Interviews</div>\
-                                    </div>\
-                                    <div class="text-center">\
-                                        <div class="text-2xl font-bold text-hr-red">0</div>\
-                                        <div class="text-gray-400 text-sm">Hires This Month</div>\
-                                    </div>\
-                                </div>`;
-                            cardsContainer.appendChild(card);
+                                    <div class="grid grid-cols-2 gap-4">\
+                                        <div class="text-center">\
+                                            <div class="text-2xl font-bold text-hr-red">0</div>\
+                                            <div class="text-gray-400 text-sm">Open Job Positions</div>\
+                                        </div>\
+                                        <div class="text-center">\
+                                            <div class="text-2xl font-bold text-hr-red">0</div>\
+                                            <div class="text-gray-400 text-sm">Applicants</div>\
+                                        </div>\
+                                        <div class="text-center">\
+                                            <div class="text-2xl font-bold text-hr-red">0</div>\
+                                            <div class="text-gray-400 text-sm">Interviews</div>\
+                                        </div>\
+                                        <div class="text-center">\
+                                            <div class="text-2xl font-bold text-hr-red">0</div>\
+                                            <div class="text-gray-400 text-sm">Hires This Month</div>\
+                                        </div>\
+                                    </div>';
+                                cardsContainer.appendChild(card);
+                            }
+                            if (current && current !== 'all') {
+                                Array.from(cardsContainer.children).forEach(function(c){
+                                    if (c.getAttribute('data-branch-id') !== String(current)) {
+                                        c.style.display = 'none';
+                                    }
+                                });
+                            }
                         }
-                        // Apply current selection to the newly rendered cards
-                        if (current && current !== 'all') {
+                    }
+                }catch(e){ console.error('Failed to render branch cards client-side', e); }
+                if (current){
+                    const match = select.querySelector('option[value="' + current + '"]');
+                    if (match) select.value = current;
+                    if (current !== 'all') {
+                        const cardsContainer = document.getElementById('branch-cards');
+                        if (cardsContainer) {
                             Array.from(cardsContainer.children).forEach(function(c){
                                 if (c.getAttribute('data-branch-id') !== String(current)) {
                                     c.style.display = 'none';
+                                } else {
+                                    c.style.display = '';
                                 }
                             });
                         }
                     }
                 }
-            }catch(e){ console.error('Failed to render branch cards client-side', e); }
-
-            // Restore selection if possible and apply card filtering
-            if (current){
-                const match = select.querySelector('option[value="' + current + '"]');
-                if (match) select.value = current;
-                // hide non-matching cards (server-rendered or client-rendered)
-                if (current !== 'all') {
-                    const cardsContainer = document.getElementById('branch-cards');
-                    if (cardsContainer) {
-                        Array.from(cardsContainer.children).forEach(function(c){
-                            if (c.getAttribute('data-branch-id') !== String(current)) {
-                                c.style.display = 'none';
-                            } else {
-                                c.style.display = '';
-                            }
-                        });
-                    }
+                return;
+            }catch(e){
+                if (e && e.name === 'AbortError') { return; }
+                if (attempt < maxRetries) {
+                    await new Promise(r => setTimeout(r, retryDelay));
+                    continue;
                 }
+                console.error('Failed to refresh branches', e);
+                return;
             }
-        }catch(e){
-            if (e && (e.name === 'AbortError' || String(e).includes('TypeError: Failed to fetch'))) {
-                // ignore aborted/preview fetch issues silently
-            } else {
-                console.warn('Branches refresh warning', e);
-            }
-        } finally {
-            _refreshBranchesRunning = false;
         }
     }
 
     // Refresh on load
     refreshBranches();
-    // Disabled auto-refresh on focus/visibility to avoid aborted fetches in preview environments
+    // Refresh when window gains focus (e.g., admin added a branch in another tab)
+    window.addEventListener('focus', refreshBranches);
+    // Also refresh when tab becomes visible
+    document.addEventListener('visibilitychange', function(){ if (!document.hidden) refreshBranches(); });
 
     // Auto-refresh recent applicants section
     async function fetchRecentApplicants(){
         try{
             const branchId = select ? select.value : 'all';
             const url = '/api/recent-applicants' + (branchId && branchId !== 'all' ? ('?branch_id=' + encodeURIComponent(branchId)) : '');
-            const res = await fetch(url, { credentials: 'same-origin' });
+            if (applicantsController) { try { applicantsController.abort(); } catch(_){ } }
+            applicantsController = new AbortController();
+            const res = await fetch(url, { credentials: 'same-origin', signal: applicantsController.signal });
             if (!res.ok) return;
             const data = await res.json();
             if (!data.success) return;
@@ -481,7 +494,10 @@ document.addEventListener('DOMContentLoaded', function(){
                 `;
                 tbody.appendChild(row);
             }
-        }catch(e){ console.error('Failed to fetch recent applicants', e); }
+        }catch(e){
+            if (e && e.name === 'AbortError') { return; }
+            console.error('Failed to fetch recent applicants', e);
+        }
     }
 
     // Initial fetch and interval
