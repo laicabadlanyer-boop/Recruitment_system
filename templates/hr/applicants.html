@@ -244,9 +244,6 @@
           </td>
           <td class="px-6 py-4 text-right">
             <div class="flex items-center justify-end gap-2">
-              <a href="{{ url_for('hr_view_applicant', applicant_id=app.applicant_id) }}" class="px-3 py-1.5 text-xs bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-lg transition-colors border border-blue-600/40" title="View Applicant">
-                <i class="fas fa-eye"></i>
-              </a>
               <a href="{{ url_for('hr_interviews') }}?application_id={{ app.application_id }}" class="px-3 py-1.5 text-xs bg-red-600/20 hover:bg-red-600/30 text-red-300 rounded-lg transition-colors border border-red-600/40" title="Schedule Interview">
                 <i class="fas fa-calendar-plus"></i>
               </a>
