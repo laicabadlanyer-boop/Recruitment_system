@@ -241,7 +241,7 @@ def build_admin_dashboard_data(user, branch_id=None):
         recent_activity.append({
             'type': 'application',
             'description': f"{item['applicant_name']} applied for {item['position_applied']}",
-            'timestamp': format_human_datetime(item['applied_at']),
+            'timestamp': item.get('submitted_at'),
             'status': item['status_key'],
         })
     for item in formatted_upcoming_interviews[:5]:
