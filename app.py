@@ -925,18 +925,21 @@ def ensure_schema_compatibility():
                 result = cursor.fetchone()
                 if result:
                     current_enum = result[0].lower()
-                    if 'scheduled' not in current_enum:
-                        # Update enum to include 'scheduled'
+                    if 'scheduled' not in current_enum or 'archived' not in current_enum:
+                        # Update enum to include 'scheduled' and 'archived'
                         cursor.execute("""
                             ALTER TABLE applications 
-                            MODIFY COLUMN status ENUM('pending', 'scheduled', 'interviewed', 'hired', 'rejected', 'withdrawn') 
+                            MODIFY COLUMN status ENUM('pending', 'scheduled', 'interviewed', 'hired', 'rejected', 'withdrawn', 'archived', 'removed', 'deleted') 
                             NOT NULL DEFAULT 'pending'
                         """)
                         updates_applied = True
-                        print('✅ Updated applications.status enum to include "scheduled"')
+                        print('✅ Updated applications.status enum to include "scheduled" and "archived"')
             except Exception as enum_error:
                 print(f'⚠️ Could not update applications.status enum: {enum_error}')
                 # Continue - enum might already be correct or table might not exist yet
+            
+            # Ensure viewed_at column exists on applications table
+            updates_applied |= ensure_column(cursor, 'applications', 'viewed_at', "DATETIME NULL DEFAULT NULL")
             
             # Ensure positions table exists
             positions_sql = """
@@ -2231,6 +2234,7 @@ def fetch_archived_applicants_data():
 def admin_archived_applicants():
     """Admin view: show archived applicants using admin template."""
     try:
+        ensure_schema_compatibility()
         archived, branches = fetch_archived_applicants_data()
         return render_template('admin/archived_applicants.html', archived=archived, branches=branches)
     
@@ -8199,6 +8203,7 @@ def unsave_job(job_id):
 def archived_applicants():
     """HR view: list archived applicants. Reuses fetch_archived_applicants_data() to ensure consistent behavior with admin."""
     try:
+        ensure_schema_compatibility()
         archived, branches = fetch_archived_applicants_data()
         return render_template('hr/archived_applicants.html', archived=archived, branches=branches)
     except Exception as exc:
@@ -8363,6 +8368,12 @@ def archive_applicant(application_id):
     except Exception:
         pass
     try:
+        # Ensure schema compatibility for status enum
+        try:
+            ensure_schema_compatibility()
+        except Exception:
+            pass
+
         # If HR, ensure the application belongs to their branch
         branch_id = get_branch_scope(user)
         if branch_id:
