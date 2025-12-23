@@ -1074,8 +1074,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 return;
             }
-            // Fallback to native form submission to ensure application is posted
             try {
+                const localFiles = uploadedFiles.filter(f => !!f.file);
+                if (localFiles.length > 0) {
+                    for (const fileData of localFiles) {
+                        const fd = new FormData();
+                        fd.append('resume_file', fileData.file, fileData.name);
+                        fd.append('file_type', (fileData.type || 'resume'));
+                        try {
+                            const jobIdInput = form.querySelector('input[name="job_id"]');
+                            if (jobIdInput && jobIdInput.value) fd.append('job_id', jobIdInput.value);
+                            const csrf = form.querySelector('input[name="csrf_token"]');
+                            if (csrf && csrf.value) fd.append('csrf_token', csrf.value);
+                        } catch (_) {}
+                        try {
+                            const resp = await fetch('/applicant/upload-resume', {
+                                method: 'POST',
+                                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                                body: fd
+                            });
+                            let data = null;
+                            try { data = await resp.json(); } catch (_) {}
+                            if (resp.ok && data && data.success && data.resume_id) {
+                                const hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = 'resume_id';
+                                hidden.value = String(data.resume_id);
+                                hidden.dataset.fileId = String(fileData.id);
+                                form.appendChild(hidden);
+                            }
+                        } catch (_) {}
+                    }
+                }
                 form.dataset.useNative = '1';
                 form.submit();
             } catch (_) {
